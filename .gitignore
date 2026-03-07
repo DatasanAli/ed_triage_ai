@@ -1,0 +1,21 @@
+# Environment variables — never commit secrets
+.env
+
+# Generated embedding files — too large for git, share via S3 instead
+src/embeddings/cases_for_embedding.jsonl
+src/embeddings/embeddings_output.jsonl
+src/embeddings/.embed_progress.json
+src/embeddings/data_prep_stats.json
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Data files — share via S3
+data/
