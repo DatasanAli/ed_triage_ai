@@ -29,9 +29,9 @@ from pathlib import Path
 # ---------------------------------------------------------------------------
 # Paths
 # ---------------------------------------------------------------------------
-ROOT = Path(__file__).resolve().parent.parent
+ROOT = Path(__file__).resolve().parent.parent.parent  # project root (ed_triage_ai/)
 DATA_DIR = ROOT / "data"
-OUTPUT_DIR = ROOT / "embeddings"
+OUTPUT_DIR = Path(__file__).resolve().parent  # src/embeddings/
 
 INPUT_CSV = DATA_DIR / "consolidated_dataset_PMH.csv"
 OUTPUT_JSONL = OUTPUT_DIR / "cases_for_embedding.jsonl"
@@ -118,66 +118,54 @@ def build_embedding_text(row: pd.Series) -> str:
     """
     Build the text we will send to Bedrock Titan for embedding.
 
-    Design decisions:
-    1. We do NOT use the raw `text` column (full discharge note).
-       Reason: It's very long (hits Titan's 8K token limit), contains HTML,
-       lots of redacted '___' tokens, and noise irrelevant to triage similarity.
+    IMPORTANT — only triage-time data is included here.
 
-    2. We use structured fields: patient info, chief complaint, vitals, HPI,
-       diagnosis, disposition, and past medical history.
-       Reason: These are the clinically meaningful signals for triage similarity.
+    Research basis (JMIR 2026 - Multi-Evidence Clinical Reasoning RAG for ED Triage):
+    Embeddings should only use information available at the moment of triage.
+    Including post-triage data (HPI, diagnosis, PMH, disposition) causes
+    spurious similarity — two unrelated patients match because they share
+    common comorbidities or similar discharge note language, not because
+    their presentations were clinically similar.
 
-    3. Each section is labeled (e.g., "CHIEF COMPLAINT:").
-       Reason: Labels help the model understand context — "chest pain" after
-       "CHIEF COMPLAINT:" is weighted differently than in free text.
+    What a triage nurse knows at triage time:
+      ✅ Chief complaint (why did you come in?)
+      ✅ Vitals (measured on arrival)
+      ✅ Demographics (age, gender — from registration)
+      ✅ ESI level (assigned during triage)
+      ✅ Arrival transport (ambulance vs walk-in — observable)
 
-    4. We keep it concise — target ~200-400 tokens per case.
-       Reason: Titan's limit is 8K tokens but shorter, denser text produces
-       better embeddings. Padding with irrelevant text hurts retrieval quality.
+    What is NOT yet known at triage time:
+      ❌ HPI — comes from physician interview later
+      ❌ Diagnosis — determined after workup
+      ❌ Disposition — decided after treatment
+      ❌ PMH — often unknown or unverified at triage
+
+    Diagnosis and disposition are kept in metadata (for the LLM to use
+    when explaining retrieved cases) but NOT in the embedding text.
     """
     sections = []
 
-    # Patient demographics
+    # Demographics — from registration, available at triage
     patient_info = clean_text(row["patient_info"])
     if patient_info:
         sections.append(f"PATIENT: {patient_info}")
 
-    # Chief complaint — the primary reason the patient came to the ED
+    # Chief complaint — the single most important triage signal
     cc = clean_text(row["chiefcomplaint"])
     sections.append(f"CHIEF COMPLAINT: {cc if cc else 'Not recorded'}")
 
-    # Triage level (ESI) — include in text so similar-acuity cases score higher
+    # ESI triage level — assigned by the triage nurse
     sections.append(f"ESI TRIAGE LEVEL: {int(row['triage'])}")
 
-    # Vitals — parse and format cleanly
+    # Vitals — measured on arrival, core triage data
     vitals = parse_vitals(clean_text(row["initial_vitals"]))
     sections.append(f"VITALS: {format_vitals_text(vitals)}")
 
-    # History of Present Illness — narrative description of the presentation
-    hpi = clean_text(row["HPI"])
-    if hpi:
-        # Truncate HPI to ~500 chars to avoid blowing the token budget.
-        # The first 500 chars of an HPI typically contain the key clinical info.
-        sections.append(f"HISTORY: {hpi[:500]}")
-
-    # Diagnoses
-    primary_dx = clean_text(row["primary_diagnosis"])
-    if primary_dx and primary_dx != "[]":
-        sections.append(f"PRIMARY DIAGNOSIS: {primary_dx}")
-
-    secondary_dx = clean_text(row["secondary_diagnosis"])
-    if secondary_dx and secondary_dx != "[]":
-        sections.append(f"SECONDARY DIAGNOSIS: {secondary_dx}")
-
-    # Disposition — what happened to the patient (admitted, home, etc.)
-    disposition = clean_text(row["disposition"])
-    if disposition:
-        sections.append(f"DISPOSITION: {disposition}")
-
-    # Past medical history — relevant for similarity (comorbidities matter)
-    pmh = clean_text(row["past_medical_history"])
-    if pmh:
-        sections.append(f"PAST MEDICAL HISTORY: {pmh[:300]}")
+    # Arrival transport — observable at triage, clinically meaningful
+    # (ambulance arrival signals pre-hospital concern)
+    arrival = clean_text(row["arrival_transport"])
+    if arrival:
+        sections.append(f"ARRIVAL: {arrival}")
 
     return "\n".join(sections)
 
@@ -232,7 +220,6 @@ def main():
         "skipped_missing_triage": 0,
         "skipped_missing_cc": 0,
         "missing_vitals": int(df["initial_vitals"].isna().sum()),
-        "missing_pmh": int(df["past_medical_history"].isna().sum()),
         "output_cases": 0,
         "triage_distribution": df["triage"].value_counts().sort_index().to_dict(),
     }
