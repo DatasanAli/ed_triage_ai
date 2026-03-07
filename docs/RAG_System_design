@@ -1,0 +1,667 @@
+# RAG System Design Document
+## Clinical Evidence Retrieval for Emergency Department Triage
+
+**Status:** Proposed/validation  
+**Project:** Explainable AI for ED Triage  
+**Component:** Retrieval-Augmented Generation (RAG)  
+**Date:** March 7, 2026
+
+---
+
+## 1. Overview
+
+This document outlines the design and implementation plan for the RAG component of our ED triage explainability system. The RAG system retrieves similar historical cases from MIMIC-IV-Ext to provide clinical evidence supporting triage predictions.
+
+---
+
+## 2. System Architecture
+
+### 2.1 High-Level Design
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    PATIENT INPUT                             │
+│  (Chief Complaint + Vitals) → Triage Model → ESI Prediction │
+└──────────────────────┬──────────────────────────────────────┘
+                       ↓
+┌─────────────────────────────────────────────────────────────┐
+│                  RAG RETRIEVAL PIPELINE                      │
+│                                                              │
+│  1. Encode patient query (Bedrock Titan Embeddings)         │
+│  2. Search Pinecone vector database for similar cases       │
+│  3. Retrieve top-k most similar historical cases            │
+│  4. Return cases with metadata (ESI, outcome, diagnosis)    │
+└──────────────────────┬──────────────────────────────────────┘
+                       ↓
+┌─────────────────────────────────────────────────────────────┐
+│                 CLINICAL REASONING (LLM)                     │
+│  Input: Patient + Prediction + SHAP + Retrieved Cases       │
+│  Output: Evidence-grounded clinical explanation             │
+│         (Bedrock Claude 3.5 Sonnet)                          │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### 2.2 Component Breakdown
+
+| Component | Technology | Purpose |
+|-----------|------------|---------|
+| **Embedding Model** | Amazon Bedrock Titan Embeddings | Convert text to dense vectors (1536-dim) |
+| **Vector Database** | Pinecone (Free tier) | Store and search 30K case embeddings |
+| **Historical Cases** | MIMIC-IV-Ext (~30K ED visits) | Source data for retrieval |
+| **Retrieval Function** | Python + Pinecone SDK | Query interface |
+| **LLM Integration** | Amazon Bedrock Claude 3.5 Sonnet | Generate clinical reasoning from evidence |
+
+---
+
+## 3. Vector Database: Pinecone
+
+### 3.1 Why Pinecone
+
+**Rationale:**
+- ✅ **Purpose-built for vector search:** Optimized for similarity search at scale
+- ✅ **Fast prototyping:** Setup in 15 minutes vs hours for alternatives
+- ✅ **Free tier:** 1M vectors covers our 30K cases with room to grow
+- ✅ **Sub-100ms latency:** Fast query performance
+- ✅ **Focus on ML:** Managed service lets us focus on explainability, not infrastructure
+- ✅ **Portfolio value:** Demonstrates understanding of modern vector databases
+
+**Architecture:**
+```
+AWS Lambda → Pinecone API → Pinecone Cloud (Serverless)
+     ↑
+AWS Bedrock (Titan Embeddings)
+     ↑
+S3 (MIMIC-IV Data)
+```
+
+**Key Points:**
+- Pinecone is a **managed SaaS** - runs in Pinecone's cloud, not in AWS account
+- IT is accessed via **API calls** from AWS resources (Lambda, EC2, SageMaker)
+- Data flow: AWS generates embeddings → sends to Pinecone via API
+- Low latency: Pinecone has AWS region endpoints (us-east-1)
+
+**Setup Steps:**
+
+1. **Create Pinecone Account**
+   - Sign up at https://www.pinecone.io/
+   - Free tier: 1 project, 1 index, 100K vectors (enough for our 30K cases)
+
+2. **Get API Key**
+   - Dashboard → API Keys → Create new key
+   - Store in AWS Secrets Manager:
+   ```bash
+   aws secretsmanager create-secret \
+       --name pinecone/api-key \
+       --secret-string '{"PINECONE_API_KEY":"your-key-here"}'
+   ```
+
+3. **Create Index** (via Python in Lambda or EC2)
+   ```python
+   import pinecone
+   
+   pinecone.init(api_key="your-api-key", environment="us-east-1-aws")
+   
+   pinecone.create_index(
+       name="ed-triage-cases",
+       dimension=1536,  # Titan Embeddings dimension
+       metric="cosine",
+       pod_type="s1.x1"  # Starter pod (free tier)
+   )
+   ```
+
+4. **Access from AWS Lambda**
+   ```python
+   import boto3
+   import pinecone
+   import json
+   
+   # Get API key from Secrets Manager
+   secrets = boto3.client('secretsmanager')
+   response = secrets.get_secret_value(SecretId='pinecone/api-key')
+   api_key = json.loads(response['SecretString'])['PINECONE_API_KEY']
+   
+   # Initialize Pinecone
+   pinecone.init(api_key=api_key, environment="us-east-1-aws")
+   index = pinecone.Index("ed-triage-cases")
+   
+   # Query
+   results = index.query(vector=embedding, top_k=5)
+   ```
+
+**Data Security:**
+- Pinecone uses TLS 1.2+ for all API calls
+- Data encrypted at rest and in transit
+- SOC 2 Type II compliant
+- HIPAA: Pinecone is not HIPAA-compliant out of box
+  - **Mitigation:** De-identify all PHI before uploading
+  - MIMIC-IV is already de-identified ✓
+
+**Cost:**
+- Development (Free tier): $0
+- Production (Starter): $70/month for 30K vectors + queries
+- No AWS data transfer costs (API calls are free)
+
+---
+
+## 4. Data Pipeline Design
+
+### 4.1 Document Structure
+
+Each historical ED case will be structured as:
+
+```json
+{
+  "case_id": "stay_28451",
+  "text": "67-year-old male presenting with chest pain. HR 118 bpm, BP 145/92 mmHg, RR 20, Temp 98.4°F, SpO2 97%. ESI Level 2.",
+  "metadata": {
+    "esi_level": 2,
+    "age": 67,
+    "gender": "male",
+    "chief_complaint": "chest pain",
+    "heart_rate": 118,
+    "systolic_bp": 145,
+    "diagnosis": "NSTEMI",
+    "disposition": "admitted",
+    "los_hours": 48.2,
+    "year": 2015
+  }
+}
+```
+
+### 4.2 Embedding Generation
+
+**Input:** Structured case text  
+**Model:** Amazon Titan Text Embeddings v1  
+**Output:** 1536-dimensional dense vector  
+
+**Why Titan Embeddings:**
+- Optimized for semantic search
+- Good performance on medical text
+- AWS-native (easy integration)
+- Cost-effective ($0.0001 per 1K tokens)
+
+**Alternative considered:** BioBERT embeddings (more domain-specific but requires SageMaker deployment)
+
+### 4.3 Indexing Strategy
+
+```python
+# Pseudocode for indexing pipeline
+
+1. Load MIMIC-IV-Ext data from S3
+2. For each case:
+   a. Create structured text representation
+   b. Generate embedding using Titan
+   c. Upsert to Pinecone with metadata
+3. Create index optimized for cosine similarity
+4. Verify index with test queries
+```
+
+**Estimated indexing time:** 30-60 minutes for 30K cases  
+**Storage required:** ~30K vectors × 1536 dims × 4 bytes = ~180MB
+
+---
+
+## 5. Retrieval Mechanism
+
+### 5.1 Query Construction
+
+Given a new patient, construct query text:
+
+```python
+def create_query_text(patient):
+    """Convert patient data to retrieval query"""
+    return f"""
+    {patient['age']}-year-old {patient['gender']} presenting with {patient['chief_complaint']}.
+    HR {patient['heart_rate']} bpm, BP {patient['systolic_bp']}/{patient['diastolic_bp']} mmHg,
+    RR {patient['respiratory_rate']}, Temp {patient['temperature']}°F, 
+    SpO2 {patient['spo2']}%.
+    """
+```
+
+### 5.2 Similarity Search
+
+**Algorithm:** Approximate Nearest Neighbors (ANN) using cosine similarity
+
+**Parameters:**
+- `top_k`: 5-10 most similar cases
+- `filter`: Optional metadata filters (e.g., same chief complaint category)
+- `threshold`: Minimum similarity score (e.g., 0.7)
+
+**Expected performance:**
+- Query latency: <100ms
+- Precision@5: >0.75 (evaluated manually)
+
+### 5.3 Post-Processing
+
+After retrieval, rank cases by:
+1. **Similarity score** (primary)
+2. **ESI level match** (secondary - prefer cases with same ESI)
+3. **Outcome diversity** (tertiary - show variety of outcomes)
+
+---
+
+## 6. Implementation Plan
+
+### Step 1: Data Preparation & Structuring
+
+**Tasks:**
+- Extract MIMIC-IV-Ext ED cases from database
+- Clean and structure case data (remove nulls, standardize formats)
+- Create text representations for all cases
+- Save structured cases to S3
+
+**Deliverables:**
+- Cleaned dataset with ~30K cases
+- Data preprocessing script (`data_prep.py`)
+- S3 bucket with structured case files
+
+**Success Criteria:**
+- All 30K cases have complete data (chief complaint + vitals + ESI + outcome)
+- Data quality validated (no missing critical fields)
+- Cases stored in consistent format
+
+---
+
+### Step 2: Pinecone Setup & Index Creation
+
+**Tasks:**
+- Create Pinecone account and get API key
+- Store API key in AWS Secrets Manager
+- Create Pinecone index with appropriate configuration
+- Test connection from AWS Lambda/EC2
+
+**Deliverables:**
+- Pinecone index: `ed-triage-cases`
+- Configuration script (`setup_pinecone.py`)
+- Environment variables documented
+
+**Success Criteria:**
+- Index created with correct dimensions (1536 for Titan)
+- API connection working from AWS
+- Index ready to accept vectors
+
+---
+
+### Step 3: Embedding Generation & Indexing
+
+**Tasks:**
+- Set up Bedrock Titan Embeddings access
+- Create batch embedding generation script
+- Generate embeddings for all 30K cases
+- Upload vectors + metadata to Pinecone
+- Verify index integrity
+
+**Deliverables:**
+- Embedding generation script (`generate_embeddings.py`)
+- Indexing script (`index_to_pinecone.py`)
+- Pinecone index populated with 30K vectors
+
+**Success Criteria:**
+- All 30K cases successfully indexed
+- Metadata correctly attached (ESI level, diagnosis, outcome)
+- Spot-check: random queries return sensible results
+
+---
+
+### Step 4: Retrieval Function Implementation
+
+**Tasks:**
+- Build retrieval API wrapper (`retrieval.py`)
+- Implement query encoding function
+- Add metadata filtering capabilities
+- Implement ranking/re-ranking logic
+- Add error handling and logging
+
+**Deliverables:**
+- `EDTriageRAG` class with clean API
+- Unit tests for retrieval functions
+- Documentation and examples
+
+**Success Criteria:**
+- Retrieval working with <200ms latency
+- Returns top-k most similar cases
+- Metadata filtering functional
+- Handles edge cases gracefully
+
+---
+
+### Step 5: Retrieval Quality Evaluation
+
+**Tasks:**
+- Create evaluation dataset (100 test queries)
+- Measure retrieval quality metrics
+- Manual review of retrieval results
+- Iterate on query construction if needed
+- Document findings
+
+**Deliverables:**
+- Evaluation notebook (`evaluate_retrieval.ipynb`)
+- Test dataset with ground truth
+- Metrics report (Precision@k, ESI agreement, diversity)
+
+**Success Criteria:**
+- Precision@5 ≥ 0.70
+- Retrieved cases have similar ESI distribution to query
+- Manual review shows clinical relevance
+
+---
+
+### Step 6: LLM Integration for Clinical Reasoning
+
+**Tasks:**
+- Set up Bedrock Claude 3.5 Sonnet access
+- Design prompt template for clinical reasoning
+- Implement reasoning generation function
+- Test on sample cases
+- Refine prompts based on output quality
+
+**Deliverables:**
+- Reasoning generation function (`generate_reasoning.py`)
+- Prompt templates documented
+- Sample outputs for review
+
+**Success Criteria:**
+- LLM generates coherent clinical reasoning
+- Reasoning references retrieved cases appropriately
+- No factual hallucinations detected (spot-check)
+- Output length appropriate (300-400 words)
+
+---
+
+### Step 7: End-to-End Pipeline Integration
+
+**Tasks:**
+- Combine retrieval + LLM reasoning into single pipeline
+- Integrate with SHAP explanations (from teammates)
+- Add performance monitoring and logging
+- Error handling for full pipeline
+- Create unified API
+
+**Deliverables:**
+- Complete `explain_triage()` function
+- Integration tests
+- Performance benchmarks
+- API documentation
+
+**Success Criteria:**
+- Full pipeline working end-to-end
+- Latency p95 <5 seconds
+- Handles edge cases (no similar cases found, API failures, etc.)
+- Clean interface for Streamlit integration
+
+---
+
+### Step 8: Evaluation & Refinement
+
+**Tasks:**
+- Run end-to-end evaluation on 100 test cases
+- Measure retrieval + reasoning quality
+- Human evaluation (clinical review)
+- Identify failure modes
+- Iterate and improve
+
+**Deliverables:**
+- Comprehensive evaluation report
+- Human evaluation results
+- Identified improvements and limitations
+- Final refined system
+
+**Success Criteria:**
+- Quantitative metrics meet targets (Precision@5 ≥ 0.70)
+- Human evaluation shows clinical coherence
+- Failure modes documented
+- System ready for demo
+
+---
+
+## 7. Evaluation Strategy
+
+### 7.1 Retrieval Quality Metrics
+
+**Quantitative:**
+- **Precision@k:** Are retrieved cases actually similar?
+- **ESI Agreement:** Do retrieved cases have similar ESI levels?
+- **Diversity:** Are different outcomes represented?
+- **Latency:** Query response time
+
+**Qualitative:**
+- Manual review of 100 retrievals
+- Clinical relevance assessment
+- Case study analysis
+
+### 7.2 Reasoning Quality Metrics
+
+**Automated:**
+- Hallucination detection (fact-checking against retrieved cases)
+- Length and structure consistency
+- Citation accuracy (does LLM reference actual retrieved cases?)
+
+**Manual:**
+- Clinical accuracy (review by teammate or clinician)
+- Actionability (does reasoning suggest next steps?)
+- Coherence (is explanation logically sound?)
+
+### 7.3 Evaluation Dataset
+
+Create test set of 100 diverse ED presentations:
+- 20 cases per ESI level (1-5)
+- Mix of common and rare chief complaints
+- Different demographic groups
+- Various vital sign patterns
+
+For each test case, evaluate:
+1. Are retrieved cases clinically similar?
+2. Does LLM reasoning make sense?
+3. Are recommendations appropriate?
+
+---
+
+## 8. Technical Specifications
+
+### 8.1 API Design
+
+```python
+class EDTriageRAG:
+    """RAG system for ED triage explainability"""
+    
+    def __init__(self, pinecone_api_key, bedrock_region='us-east-1'):
+        """Initialize RAG system"""
+        pass
+    
+    def retrieve_cases(self, patient_data: dict, top_k: int = 5) -> list:
+        """
+        Retrieve similar historical cases
+        
+        Args:
+            patient_data: Dict with keys: age, gender, chief_complaint, 
+                         heart_rate, systolic_bp, etc.
+            top_k: Number of cases to retrieve
+        
+        Returns:
+            List of dicts with keys: case_text, metadata, similarity_score
+        """
+        pass
+    
+    def generate_reasoning(
+        self, 
+        patient_data: dict,
+        prediction: dict,
+        shap_features: dict,
+        retrieved_cases: list
+    ) -> str:
+        """
+        Generate clinical reasoning using LLM
+        
+        Args:
+            patient_data: Patient information
+            prediction: Model prediction (esi_level, confidence)
+            shap_features: Top SHAP feature importances
+            retrieved_cases: Output from retrieve_cases()
+        
+        Returns:
+            Clinical reasoning text (300-400 words)
+        """
+        pass
+    
+    def explain(self, patient_data: dict, prediction: dict, shap_features: dict) -> dict:
+        """
+        Complete explainability pipeline
+        
+        Returns:
+            {
+                'retrieved_cases': [...],
+                'clinical_reasoning': "...",
+                'retrieval_time_ms': 85,
+                'reasoning_time_ms': 2341
+            }
+        """
+        pass
+```
+
+### 8.2 Environment Variables
+
+```bash
+PINECONE_API_KEY=your_api_key_here
+PINECONE_ENVIRONMENT=us-east-1-aws
+PINECONE_INDEX_NAME=ed-triage-cases
+AWS_REGION=us-east-1
+```
+
+### 8.3 Dependencies
+
+```txt
+pinecone-client==3.0.0
+boto3==1.34.0
+pandas==2.1.0
+numpy==1.24.0
+python-dotenv==1.0.0
+```
+
+---
+
+## 9. Cost Analysis
+
+### 9.1 Development Phase (6 weeks)
+
+| Component | Usage | Cost |
+|-----------|-------|------|
+| Pinecone Free Tier | 30K vectors, 1K queries | $0 |
+| Bedrock Titan Embeddings | 30K cases × 200 tokens = 6M tokens | $0.60 |
+| Bedrock Claude 3.5 | 1000 reasoning calls × 1K tokens | $3.00 |
+| S3 Storage | 100MB data | $0.01 |
+| **Total** | | **~$4** |
+
+### 9.2 Production Estimate (1000 patients/day)
+
+| Component | Monthly Usage | Cost |
+|-----------|---------------|------|
+| Pinecone Starter | 30K vectors + 30K queries | $70 |
+| Bedrock Titan | 30K queries × 200 tokens | $6 |
+| Bedrock Claude | 30K reasoning × 1K tokens | $90 |
+| **Total/month** | | **~$166** |
+
+---
+
+## 10. Success Criteria
+
+### 11.1 Minimum Viable Product (Week 3)
+
+- ✅ 30K cases indexed in vector database
+- ✅ Retrieval working with <200ms latency
+- ✅ LLM generates coherent reasoning
+- ✅ No critical bugs
+
+### 11.2 Full Success (Week 4)
+
+- ✅ Precision@5 ≥ 0.70 on test set
+- ✅ Retrieved cases clinically relevant (manual eval)
+- ✅ LLM reasoning cites actual retrieved cases
+- ✅ No hallucinations detected
+- ✅ End-to-end latency <5 seconds
+- ✅ Clean API for Streamlit integration
+
+### 11.3 Stretch Goals
+
+- ✅ Metadata filtering (e.g., by age group, chief complaint)
+- ✅ Retrieval diversity (show different outcomes)
+- ✅ Confidence scores on reasoning quality
+- ✅ A/B comparison of different embedding models
+
+---
+
+## 12. Open Questions
+
+1. **Embedding model choice:** Titan vs BioBERT vs domain-specific?
+2. **Optimal top_k:** Retrieve 5 or 10 cases?
+3. **Metadata filtering:** Should we filter by ESI level or show diversity?
+4. **Chunking strategy:** Store full case or break into sections?
+5. **LLM choice:** Claude 3.5 Sonnet vs Haiku (cost vs quality)?
+
+**Decision process:** Run experiments in Week 1-2 to answer these
+
+---
+
+## 13. References
+
+### Technical Documentation
+- Pinecone: https://docs.pinecone.io/
+- AWS Bedrock: https://docs.aws.amazon.com/bedrock/
+- MIMIC-IV: https://physionet.org/content/mimiciv/
+
+### Academic Papers
+- Lewis et al. (2020). "Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks"
+- Karpukhin et al. (2020). "Dense Passage Retrieval for Open-Domain Question Answering"
+- Izacard & Grave (2021). "Leveraging Passage Retrieval with Generative Models"
+
+---
+
+## 14. Appendix
+
+### A. Sample Case Document
+
+```
+CASE ID: 28451
+
+PATIENT PRESENTATION:
+67-year-old male presenting with chest pain
+
+VITAL SIGNS:
+- Heart Rate: 118 bpm
+- Blood Pressure: 145/92 mmHg
+- Respiratory Rate: 20 breaths/min
+- Temperature: 98.4°F
+- Oxygen Saturation: 97%
+
+TRIAGE ASSESSMENT:
+- ESI Level: 2 (High Risk - Emergent)
+- Acuity: High
+
+CLINICAL COURSE:
+- ED Disposition: Admitted to hospital
+- Diagnosis: Non-ST Elevation Myocardial Infarction (NSTEMI)
+- Treatment: Cardiac catheterization, 2-vessel stenting
+- Length of Stay: 48.2 hours
+- Outcome: Discharged home, stable
+
+TEMPORAL CONTEXT:
+- Arrival: 2015-03-14 08:23:00
+- ED Discharge: 2015-03-14 12:15:00
+```
+
+### B. Example Query & Results
+
+**Query:**
+```
+68-year-old female with chest pain, HR 110, BP 135/85, 
+RR 18, Temp 98.6°F, SpO2 99%
+```
+
+**Retrieved Cases:**
+1. 67yo M, chest pain, HR 118, NSTEMI → Admitted (similarity: 0.89)
+2. 70yo F, chest pressure, HR 105, unstable angina → Admitted (similarity: 0.87)
+3. 65yo M, chest discomfort, HR 112, ACS → Cath lab (similarity: 0.85)
+4. 72yo F, chest pain, HR 98, non-cardiac → Discharged (similarity: 0.81)
+5. 69yo M, chest pain, HR 120, PE ruled out → Observation (similarity: 0.79)
+
+---
+
