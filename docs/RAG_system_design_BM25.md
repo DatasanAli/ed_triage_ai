@@ -80,7 +80,7 @@ Retrieval is **hybrid**: dense semantic search over BioClinical embeddings is fu
 
 | Component | Technology | Purpose |
 |-----------|------------|---------|
-| **Dense Embedding** | BioClinical ModernBERT (`lindvalllab/BioClinical-ModernBERT-large`) | Clinical semantic vectors — same encoder as prediction model |
+| **Dense Embedding** | BioClinical ModernBERT base checkpoint (frozen, pre-fine-tuning) — or MedCPT for production | Clinical semantic vectors. Base weights only — not the fine-tuned classifier |
 | **Sparse Retrieval** | BM25 (`rank_bm25`) | Exact medical keyword matching |
 | **Vector Index** | FAISS (`faiss-cpu`) | ANN search over 9K–30K dense vectors |
 | **Fusion** | Reciprocal Rank Fusion (RRF) | Merge dense + sparse ranked lists |
@@ -90,15 +90,31 @@ Retrieval is **hybrid**: dense semantic search over BioClinical embeddings is fu
 
 ---
 
-## 3. Embedding Strategy: Why BioClinical ModernBERT
+## 3. Embedding Strategy
 
-### 3.1 Architectural Coherence
+### 3.1 Model Choice: Base vs. Fine-Tuned vs. Retrieval-Specific
 
-The triage prediction model encodes patient text using `BioClinical ModernBERT` to produce a [CLS] embedding that drives classification. If the RAG system uses a different embedding model (e.g., a general-purpose commercial embedding API), the retrieval and prediction live in entirely different vector spaces.
+There are three realistic options for the embedding model, and the distinction between them matters.
 
-The consequence: a case that the prediction model finds semantically critical may score low in retrieval, and vice versa. Retrieved "similar" cases may not actually represent the same clinical reasoning the model applied.
+**Option A — Base BioClinicalBERT / BioClinical ModernBERT (recommended for this project)**
 
-**Solution:** Reuse the BioClinical ModernBERT encoder — already loaded in memory for prediction — as the embedding model for both indexing and query encoding. No additional model deployment. No semantic mismatch.
+Use the base checkpoint — the pre-trained weights *before* fine-tuning for triage classification — frozen, as the embedding model for both indexing and query encoding.
+
+This is the recommended approach for this capstone. The base model is trained on MIMIC clinical notes and produces clinically grounded embeddings without the distortion introduced by classification fine-tuning (see below). It requires no additional model download since the base weights are the starting point of the prediction model training, and it keeps the dependency footprint minimal.
+
+**Why not the fine-tuned prediction model?**
+
+After fine-tuning on the 4-class ESI classification task, the model's embedding space is warped toward the triage decision boundary. Embeddings cluster by *predicted ESI level* rather than by *clinical similarity of presentation*. Two patients with near-identical presentations but marginally different vitals that fall on opposite sides of the ESI 2/3 boundary will be pushed far apart in embedding space — which is useful for classification but harmful for retrieval. Using the fine-tuned model's [CLS] vectors for retrieval would return cases that the classifier agrees with, not cases that are clinically similar.
+
+**Option B — MedCPT (state-of-the-art clinical retrieval)**
+
+MedCPT (NCBI/NIH, 2023) is a clinical encoder trained specifically for retrieval using contrastive learning (InfoNCE loss) on 255M PubMed query-article pairs. Its loss function explicitly pulls semantically similar clinical documents together and pushes dissimilar ones apart — which is exactly the objective for RAG retrieval. BioClinical ModernBERT was trained with a masked language model objective, which does not optimize for retrieval.
+
+MedCPT is the ideal embedding model for this use case. The tradeoff is an additional model dependency (`ncbi/MedCPT-Query-Encoder` + `ncbi/MedCPT-Article-Encoder` — separate encoders for queries and documents). For a capstone project with limited infrastructure overhead, Option A is the pragmatic choice. For a production clinical system, Option B is correct.
+
+**Option C — General-purpose commercial embeddings (not recommended)**
+
+General-purpose models (e.g., Titan Embeddings, OpenAI text-embedding-3) are not trained on clinical text and do not understand medical terminology at the level required for reliable ED triage retrieval. These are excluded from consideration.
 
 ### 3.2 Query and Index Text Format
 
@@ -114,7 +130,7 @@ Historical cases in the index must include HPI where available in MIMIC-IV. For 
 
 ### 3.3 Embedding Dimension
 
-BioClinical ModernBERT outputs a 768-dimensional [CLS] vector. FAISS index uses `IndexFlatIP` (inner product, equivalent to cosine on normalized vectors) for exact search at our corpus size (~9K vectors), or `IndexIVFFlat` for approximate search if the corpus grows to 30K+.
+BioClinical ModernBERT (base) outputs a 768-dimensional [CLS] vector. MedCPT outputs 768 dimensions as well, so the FAISS index configuration is identical regardless of which option is chosen. FAISS uses `IndexFlatIP` (inner product, equivalent to cosine on normalized vectors) for exact search at our corpus size (~9K vectors), or `IndexIVFFlat` for approximate search if the corpus grows to 30K+.
 
 ---
 
@@ -664,11 +680,12 @@ Note: `BioClinical ModernBERT` is loaded via the `transformers` library already 
 
 ## 18. Open Questions
 
-1. **BM25 tokenizer:** Standard NLTK word tokenizer vs. clinical-specific tokenizer (e.g., `scispaCy`)? Recommendation: start with NLTK, evaluate if clinical abbreviation handling is a bottleneck.
-2. **Reranker domain gap:** `ms-marco-MiniLM` is not clinical-domain. If ablation shows it hurts, replace with a BioClinical cross-encoder fine-tuned on MIMIC pairs.
-3. **Optimal top_k for RRF input:** Top-50 per ranker is standard. With 9K corpus this may be reducible to 20 without recall loss — test empirically.
-4. **Contrastive ESI direction:** For ESI 1 predictions, there is no ESI 0. Contrastive direction is always toward less acute (ESI 2). Handle edge case in code.
-5. **Temporal filter threshold:** `year >= 2015` proposed to reduce protocol drift. Validate that this doesn't disproportionately reduce representation of rare ESI levels.
+1. **Embedding model upgrade path:** The capstone uses base BioClinical ModernBERT (frozen) for embeddings. If Precision@5 or ESI Concordance@5 fall below targets, the upgrade is MedCPT (`ncbi/MedCPT-Query-Encoder` + `ncbi/MedCPT-Article-Encoder`). Run the ablation on the 100-case eval set before committing to the switch — the BM25 + reranking pipeline may compensate sufficiently.
+2. **BM25 tokenizer:** Standard NLTK word tokenizer vs. clinical-specific tokenizer (e.g., `scispaCy`)? Recommendation: start with NLTK, evaluate if clinical abbreviation handling is a bottleneck.
+3. **Reranker domain gap:** `ms-marco-MiniLM` is not clinical-domain. If ablation shows it hurts, replace with a BioClinical cross-encoder fine-tuned on MIMIC pairs.
+4. **Optimal top_k for RRF input:** Top-50 per ranker is standard. With 9K corpus this may be reducible to 20 without recall loss — test empirically.
+5. **Contrastive ESI direction:** For ESI 1 predictions, there is no ESI 0. Contrastive direction is always toward less acute (ESI 2). Handle edge case in code.
+6. **Temporal filter threshold:** `year >= 2015` proposed to reduce protocol drift. Validate that this doesn't disproportionately reduce representation of rare ESI levels.
 
 ---
 
@@ -687,6 +704,7 @@ Note: `BioClinical ModernBERT` is loaded via the `transformers` library already 
 ### Clinical Embedding
 - Lindvall, M. et al. (2025). "BioClinical ModernBERT: A Clinical Language Model." Karolinska / lindvalllab, HuggingFace: `lindvalllab/BioClinical-ModernBERT-large`.
 - Alsentzer, E. et al. (2019). "Publicly Available Clinical BERT Embeddings." *NAACL Clinical NLP Workshop*.
+- Jin, Q. et al. (2023). "MedCPT: Contrastive Pre-trained Transformers with Large-scale PubMed Search Logs for Zero-shot Biomedical Information Retrieval." *Bioinformatics*. HuggingFace: `ncbi/MedCPT-Query-Encoder`, `ncbi/MedCPT-Article-Encoder`.
 
 ### Vector Search
 - Johnson, J., Douze, M. & Jégou, H. (2021). "Billion-Scale Similarity Search with GPUs." *IEEE Transactions on Big Data*.
