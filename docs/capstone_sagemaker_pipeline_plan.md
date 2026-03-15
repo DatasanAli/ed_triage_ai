@@ -11,7 +11,7 @@ Build a **reproducible SageMaker training pipeline** that proves the workflow wo
 2. Run a preprocessing step
 3. Run a mock training step on a CPU instance
 4. Save a model artifact to S3
-5. Be executable from SageMaker Studio
+5. Be executable from any environment with a configured AWS profile (local machine or Studio)
 6. Be easy for a teammate to reuse by swapping the training script
 
 ## Out of Scope
@@ -24,9 +24,10 @@ Build a **reproducible SageMaker training pipeline** that proves the workflow wo
 ## High-Level Approach
 
 - **Region:** `us-east-1`
-- **Dev environment:** SageMaker Studio (Shared Space)
+- **Dev environment:** local machine or SageMaker Studio
 - **Orchestration:** SageMaker Pipelines via the Python SDK
 - **Source of truth:** GitHub
+- **Execution:** any environment with a configured AWS profile for the project account
 
 ### Pipeline Shape
 1. **ProcessingStep** — reads raw data from S3, preprocesses, writes train/validation splits to S3
@@ -82,8 +83,9 @@ Set up the environment needed to start coding.
 Tasks:
 - Create SageMaker Domain (`sm-edtriage-dev-domain`)
 - Create or identify the SageMaker execution role for the domain
-- Create Shared Space (`sm-edtriage-shared`)
-- Confirm all team members can access Studio
+- Create Shared Space (`sm-edtriage-shared`) (optional — for shared Studio use)
+- Ensure each team member has a configured AWS profile with credentials that can assume the execution role
+- Confirm the pipeline can be triggered from a local machine using the AWS profile
 - Verify SageMaker instance quotas for `ml.m5.xlarge` (processing and training); if admin access is required, mark quota request status as TBD
 
 #### Execution Role Permissions
@@ -99,7 +101,8 @@ Tasks:
 For development: **AmazonSageMakerFullAccess** + S3 access scoped to the project bucket.
 
 Completion gate:
-- [ ] Domain active; all members can open Studio
+- [ ] Domain active
+- [ ] Each team member can run `aws sts get-caller-identity` with their configured profile
 - [ ] Execution role ARN known with required permissions
 - [ ] Instance quotas confirmed, or quota request status recorded as TBD
 - [ ] Sample data in `s3://ed-triage-capstone-group7/data/raw/`
@@ -154,7 +157,7 @@ Completion gate:
 ### Phase 5 — Smoke Test
 Prove the pipeline works end to end.
 
-- [ ] Pipeline executes successfully from Studio
+- [ ] Pipeline executes successfully from a local machine (or Studio)
 - [ ] Processed data and model artifact appear in S3
 - [ ] Logs visible in CloudWatch
 - [ ] A second run with different parameters also succeeds
