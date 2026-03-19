@@ -38,6 +38,7 @@ def get_pipeline(
     default_bucket: str | None = None,
     pipeline_name: str = PIPELINE_NAME,
     training_script: str = "train_mock.py",
+    preprocessing_script: str = "preprocess.py",
     skip_preprocessing: bool = False,
 ) -> Pipeline:
     """Build and return the SageMaker Pipeline object (does not execute it).
@@ -146,7 +147,7 @@ def get_pipeline(
         processing_step = ProcessingStep(
             name="Preprocess",
             processor=sklearn_processor,
-            code="scripts/preprocess.py",
+            code=f"scripts/{preprocessing_script}",
             inputs=[
                 ProcessingInput(
                     source=input_data_uri,
