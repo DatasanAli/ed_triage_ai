@@ -349,7 +349,7 @@ def eval_epoch(model, loader, criterion, device):
 
 
 def load_split(directory):
-    files = glob.glob(os.path.join(directory, "*.csv"))
+    files = sorted(glob.glob(os.path.join(directory, "*.csv")))
     if not files:
         raise FileNotFoundError(f"No CSV files in {directory}")
     return pd.read_csv(files[0])
