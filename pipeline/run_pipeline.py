@@ -39,7 +39,7 @@ def main():
     parser.add_argument("--bucket", default=DEFAULT_BUCKET, help="S3 bucket")
     parser.add_argument("--pipeline-name", default="edtriage-train-pipeline")
     parser.add_argument("--training-script", default="train_mock.py", help="Training script name")
-    parser.add_argument("--training-instance-type", default="ml.m5.xlarge", help="Training instance type (e.g.: ml.g5.xlarge for GPU)")
+    parser.add_argument("--training-instance-type", required=True, help="Training instance type (e.g.: ml.g5.xlarge for GPU)")
     parser.add_argument("--epochs", type=int, required=True, help="Number of training epochs")
     parser.add_argument("--input-data-uri", default=None, help="Override InputDataUri for preprocessing")
     parser.add_argument("--force-preprocess", action="store_true",
@@ -59,12 +59,13 @@ def main():
 
     pipeline = get_pipeline(
         role=args.role,
+        epochs=args.epochs,
+        training_instance_type_str=args.training_instance_type,
         region=args.region,
         default_bucket=args.bucket,
         pipeline_name=args.pipeline_name,
         training_script=args.training_script,
         skip_preprocessing=skip_preprocessing,
-        epochs=args.epochs,
     )
 
     # ── Upsert (create or update) ─────────────────────────────────────────────

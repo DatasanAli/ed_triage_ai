@@ -33,6 +33,7 @@ DEFAULT_SPLITS_PREFIX = "Data_Output/splits"
 def get_pipeline(
     role: str,
     epochs: int,
+    training_instance_type_str: str,
     region: str = "us-east-1",
     default_bucket: str | None = None,
     pipeline_name: str = PIPELINE_NAME,
@@ -70,7 +71,7 @@ def get_pipeline(
     )
     training_instance_type = ParameterString(
         name="TrainingInstanceType",
-        default_value="ml.m5.xlarge",
+        default_value=training_instance_type_str,
     )
     training_instance_count = ParameterString(
         name="TrainingInstanceCount",
@@ -92,7 +93,7 @@ def get_pipeline(
             region=region,
             version=PYTORCH_FRAMEWORK_VERSION,
             py_version=PYTORCH_PY_VERSION,
-            instance_type="ml.t3.medium",  # used only for image lookup
+            instance_type=training_instance_type_str,
             image_scope="training",
         ),
         role=role,
