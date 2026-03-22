@@ -30,6 +30,8 @@ Deploy to a specific endpoint:
 """
 
 import argparse
+import os
+import sys
 
 import boto3
 
@@ -67,7 +69,24 @@ def main():
                         help="Instance type for the inference endpoint (default: ml.m5.xlarge)")
     parser.add_argument("--endpoint-name", default="edtriage-live",
                         help="Name of the SageMaker endpoint to create/update (default: edtriage-live)")
+    parser.add_argument("--processing-instance-type", default="ml.t3.medium",
+                        help="Instance type for evaluate/deploy processing steps (default: ml.t3.medium)")
     args = parser.parse_args()
+
+    # ── Validate architecture exists ────────────────────────────────────────
+    models_dir = os.path.join(os.path.dirname(__file__), "..", "models")
+    arch_dir = os.path.join(models_dir, args.architecture)
+    if not os.path.isdir(arch_dir):
+        available = [
+            d for d in os.listdir(models_dir)
+            if os.path.isdir(os.path.join(models_dir, d)) and d != "__pycache__"
+        ]
+        print(
+            f"Error: architecture '{args.architecture}' not found. "
+            f"Available: {available}",
+            file=sys.stderr,
+        )
+        sys.exit(1)
 
     # ── Decide whether to skip preprocessing ─────────────────────────────────
     if args.force_preprocess:
@@ -90,6 +109,7 @@ def main():
         pipeline_name=args.pipeline_name,
         skip_preprocessing=skip_preprocessing,
         endpoint_instance_type_str=args.endpoint_instance_type,
+        processing_instance_type_str=args.processing_instance_type,
     )
 
     # ── Upsert (create or update) ─────────────────────────────────────────────

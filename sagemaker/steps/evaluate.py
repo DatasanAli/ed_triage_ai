@@ -42,8 +42,10 @@ def load_new_model_metrics(extract_dir):
     """Read val_metrics from config.json inside extracted model artifacts."""
     config_path = os.path.join(extract_dir, "config.json")
     if not os.path.exists(config_path):
-        print("WARNING: config.json not found. Using default metric 0.0.")
-        return {"macro_f1": 0.0, "architecture": "unknown"}
+        raise FileNotFoundError(
+            f"config.json not found in model archive at {extract_dir}. "
+            "Every training script must write config.json to SM_MODEL_DIR."
+        )
 
     with open(config_path) as f:
         config = json.load(f)

@@ -1,5 +1,7 @@
 # SageMaker Training Pipeline Plan
 
+> **Note (2026-03-22):** The pipeline has been restructured since this plan was written. The repository layout now uses `sagemaker/` instead of `scripts/` and `pipeline/`, and a training dispatcher pattern replaces per-architecture script swapping. See [sagemaker/README.md](../sagemaker/README.md) for current documentation.
+
 ## Purpose
 Agreed MVP plan for the capstone training pipeline. Intended for team review and PR approval.
 
@@ -18,7 +20,7 @@ The pipeline uses a **single pipeline definition** — different architectures a
 
 ## Out of Scope
 - Real LLM fine-tuning or GPU training
-- Inference endpoints or explainability
+- ~~Inference endpoints or explainability~~ *(inference endpoints now implemented)*
 - RAG integration
 - GitHub Actions or automated triggers
 - Production security hardening
@@ -86,21 +88,30 @@ Additive — lives alongside the existing `src/` directory:
 
 ```text
 ed_triage_ai/
-  pipeline/
-    pipeline_definition.py   # defines the SageMaker Pipeline
-    run_pipeline.py           # upserts and starts an execution
-  scripts/
-    preprocess.py             # entry point for ProcessingStep
-    train_mock.py             # mock training script (CPU smoke test)
-    train_arch4.py            # real arch4 training script (swapped in later)
+  sagemaker/
+    pipeline/
+      pipeline_definition.py   # defines the SageMaker Pipeline DAG
+      run_pipeline.py          # CLI to upsert and execute the pipeline
+    steps/
+      preprocess.py            # ProcessingStep: data splitting
+      train.py                 # TrainingStep: dispatcher (imports models/<arch>/train.py)
+      evaluate.py              # ProcessingStep: champion comparison
+      deploy.py                # ProcessingStep: endpoint management
+    models/
+      mock/
+        train.py               # Mock training (bert-tiny, CPU smoke test)
+        inference.py            # Serving handler
+      arch4/
+        train.py               # BioClinicalBERT + LightGBM fusion training
+        inference.py            # Serving handler (BERT + LightGBM + feature engineering)
   notebooks/
-    smoke_test_local.ipynb    # runs preprocess + train locally from JupyterLab
-  src/                        # existing code
+    smoke_test_local.ipynb     # runs preprocess + train locally from JupyterLab
+  src/                         # existing code
   docs/
   README.md
 ```
 
-`scripts/` holds entry-point scripts that work in both JupyterLab (via env-var overrides) and SageMaker managed containers (via `/opt/ml/` defaults). Different training scripts live side by side — `run_pipeline.py` selects which one to use.
+`steps/train.py` is a dispatcher — it receives `--architecture` and imports `models/<arch>/train.py`, calling its `main()` function. To add a new architecture, only create files in `models/<name>/`.
 
 ## Phase Plan
 
@@ -256,12 +267,12 @@ Once approved:
 
 | Phase | Status |
 |---|---|
-| Phase 1 — AWS Foundation | ✅ Done (quota blocker noted) |
-| Phase 2 — Preprocessing Script | ✅ Done (`scripts/preprocess.py`) |
-| Phase 3 — Mock Training Script | ✅ Done (`scripts/train_mock.py`) |
-| Phase 4 — Pipeline Assembly | ✅ Done (`pipeline/pipeline_definition.py`, `pipeline/run_pipeline.py`) |
-| Phase 5 — Smoke Test (JupyterLab) | ⏳ Next — run `notebooks/smoke_test_local.ipynb` |
-| Phase 6 — Quota Request & Pipeline Execution | Not started |
+| Phase 1 — AWS Foundation | ✅ Done |
+| Phase 2 — Preprocessing Script | ✅ Done (`sagemaker/steps/preprocess.py`) |
+| Phase 3 — Mock Training Script | ✅ Done (`sagemaker/models/mock/train.py`) |
+| Phase 4 — Pipeline Assembly | ✅ Done (`sagemaker/pipeline/pipeline_definition.py`, `run_pipeline.py`) |
+| Phase 5 — Smoke Test (JupyterLab) | ✅ Done — mock model deployed to `edtriage-live` endpoint |
+| Phase 6 — Quota Request & Pipeline Execution | ✅ Done — pipeline runs as managed SageMaker jobs |
 
 ## Next Step
-Run the JupyterLab smoke test (Phase 5) using `notebooks/smoke_test_local.ipynb` on `ml.c5.2xlarge`.
+Run the arch4 pipeline to deploy the BioClinicalBERT + LightGBM fusion model.

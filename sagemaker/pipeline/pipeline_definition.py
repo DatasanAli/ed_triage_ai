@@ -49,6 +49,7 @@ def get_pipeline(
     pipeline_name: str = PIPELINE_NAME,
     skip_preprocessing: bool = False,
     endpoint_instance_type_str: str = "ml.m5.xlarge",
+    processing_instance_type_str: str = "ml.t3.medium",
 ) -> Pipeline:
     """Build and return the SageMaker Pipeline object (does not execute it).
 
@@ -233,7 +234,7 @@ def get_pipeline(
     evaluate_processor = SKLearnProcessor(
         framework_version=SKLEARN_FRAMEWORK_VERSION,
         role=role,
-        instance_type="ml.t3.medium",
+        instance_type=processing_instance_type_str,
         instance_count=1,
         sagemaker_session=session,
         env={"BUCKET_NAME": default_bucket},
@@ -302,7 +303,7 @@ def get_pipeline(
     deploy_processor = SKLearnProcessor(
         framework_version=SKLEARN_FRAMEWORK_VERSION,
         role=role,
-        instance_type="ml.t3.medium",
+        instance_type=processing_instance_type_str,
         instance_count=1,
         sagemaker_session=session,
         env={

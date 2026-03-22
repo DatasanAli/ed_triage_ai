@@ -16,6 +16,8 @@ Artifacts written to SM_MODEL_DIR:
   lgbm_fold_summary.csv   Per-fold LightGBM metrics
   history.csv             Epoch-level training history
   config.json             Full run config + test metrics
+  inference.py            PyTorch serving handler (copied from models/arch4/)
+  requirements.txt        Inference-time dependencies
 """
 
 import argparse
@@ -622,6 +624,7 @@ def main():
         "bert_model":          BERT_MODEL,
         "structured_features": STRUCTURED_FEATURES,
         "structured_stats":    structured_stats,
+        "clip_bounds":         {k: list(v) for k, v in CLIP_BOUNDS.items()},
         "transport_map":       TRANSPORT_MAP,
         "class_weights":       [float(x) for x in class_weights.tolist()],
         "hyperparameters":     vars(args),
@@ -635,12 +638,25 @@ def main():
     with open(os.path.join(MODEL_DIR, "config.json"), "w") as f:
         json.dump(config, f, indent=2)
 
-    # Copy inference.py into model archive if it exists
+    # Copy inference.py into model archive (REQUIRED for serving)
     inference_src = os.path.join(os.path.dirname(__file__), "inference.py")
-    if os.path.exists(inference_src):
-        inference_dst = os.path.join(MODEL_DIR, "inference.py")
-        shutil.copy2(inference_src, inference_dst)
-        print(f"Copied inference → {inference_dst}")
+    if not os.path.exists(inference_src):
+        raise FileNotFoundError(
+            f"inference.py not found at {inference_src}. "
+            "Every model architecture must have an inference.py for serving."
+        )
+    inference_dst = os.path.join(MODEL_DIR, "inference.py")
+    shutil.copy2(inference_src, inference_dst)
+    print(f"Copied inference → {inference_dst}")
+
+    # Write requirements.txt for the inference container
+    req_path = os.path.join(MODEL_DIR, "requirements.txt")
+    with open(req_path, "w") as f:
+        f.write("transformers==4.40.2\n")
+        f.write("lightgbm==4.3.0\n")
+        f.write("joblib>=1.3.0\n")
+        f.write("scikit-learn>=1.3.0\n")
+    print(f"Saved requirements → {req_path}")
 
     print("\nAll artifacts saved. Training complete.")
 

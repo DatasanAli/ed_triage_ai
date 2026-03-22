@@ -74,6 +74,7 @@ sagemaker/
       inference.py             # Serving handler
     arch4/                   # BioClinicalBERT + LightGBM fusion model
       train.py                 # Training logic
+      inference.py             # Serving handler (BERT + LightGBM + feature engineering)
   requirements.txt           # Shared training dependencies
 ```
 
@@ -124,13 +125,41 @@ A new model replaces the champion only if its validation macro-F1 is strictly gr
 
 ## Testing the Endpoint
 
+**Important:** The AWS CLI `--body` parameter sends raw bytes. Write JSON to a file and use `fileb://` to avoid encoding issues.
+
 ```bash
-# Invoke the live endpoint
+# Mock model — text only
+echo '{"triage_text": "Chief complaint: chest pain. Presenting with chest pain. History: 55 yo male with acute onset chest pain radiating to left arm"}' > /tmp/payload.json
+
 aws sagemaker-runtime invoke-endpoint \
     --endpoint-name edtriage-live \
     --content-type application/json \
-    --body '{"triage_text": "Chief complaint: chest pain. Presenting with chest pain. History: 55 yo male with acute onset chest pain radiating to left arm"}' \
-    /tmp/response.json && cat /tmp/response.json
+    --accept application/json \
+    --body fileb:///tmp/payload.json \
+    /tmp/response.json && cat /tmp/response.json | python3 -m json.tool
+```
+
+```bash
+# Arch4 model — text + structured vitals (all structured fields are optional)
+echo '{
+  "triage_text": "Chief complaint: chest pain. Presenting with chest pain. History: 55 yo male with acute onset chest pain radiating to left arm",
+  "heart_rate": 110,
+  "sbp": 90,
+  "dbp": 60,
+  "resp_rate": 22,
+  "spo2": 94,
+  "temp_f": 98.6,
+  "age": 55,
+  "arrival_transport": "AMBULANCE",
+  "pain": 8
+}' > /tmp/payload.json
+
+aws sagemaker-runtime invoke-endpoint \
+    --endpoint-name edtriage-live \
+    --content-type application/json \
+    --accept application/json \
+    --body fileb:///tmp/payload.json \
+    /tmp/response.json && cat /tmp/response.json | python3 -m json.tool
 ```
 
 Expected response:

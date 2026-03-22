@@ -21,6 +21,7 @@ sagemaker/
     arch4/
       __init__.py
       train.py           # Training logic (must export main())
+      inference.py       # PyTorch serving handler (BERT + LightGBM + feature engineering)
   requirements.txt     # Shared deps installed by SageMaker before running training entry point
 ```
 
@@ -44,7 +45,7 @@ shutil.copy2(os.path.join(os.path.dirname(__file__), "inference.py"),
 The serving container only has access to the model archive — not the training source_dir. Any model classes used in `inference.py` must be defined directly in that file, not imported from `train.py`.
 
 ### inference.py must write a requirements.txt into SM_MODEL_DIR
-The PyTorch inference container does not have `transformers` or `lightgbm` pre-installed. The training script must write a `requirements.txt` to `SM_MODEL_DIR` listing inference-time dependencies. The serving container installs these before loading the model.
+The PyTorch inference container does not have `transformers` or `lightgbm` pre-installed. The training script must write a `requirements.txt` to `SM_MODEL_DIR` listing inference-time dependencies. The serving container installs these before loading the model. Dependencies are model-specific: mock needs only `transformers`; arch4 also needs `lightgbm`, `joblib`, and `scikit-learn`.
 
 ### Do not hardcode architecture names in pipeline_definition.py or run_pipeline.py
 Architecture is passed as a parameter (`--architecture`). The pipeline code is architecture-agnostic. To add a new architecture, only create files in `models/<name>/` — never modify pipeline orchestration code.

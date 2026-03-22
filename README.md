@@ -59,6 +59,10 @@ Development utilizes de-identified emergency department encounter data including
 
 In production deployment, equivalent data would be extracted in real-time from hospital electronic health record systems during the triage process.
 
+## Deployment
+
+The model is deployed via an automated SageMaker Pipeline. See [sagemaker/README.md](sagemaker/README.md) for pipeline documentation, deployment instructions, and endpoint testing.
+
 ## Use Cases
 
 - **Emergency Department Triage**: Primary decision support for triage nurses

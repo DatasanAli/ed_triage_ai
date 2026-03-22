@@ -4,6 +4,10 @@ Deploy step for SageMaker Pipeline.
 Creates or updates a SageMaker real-time endpoint with the new champion model,
 then writes the updated champion metrics to S3.
 
+Repacks the model archive with a code/ directory containing inference.py and
+requirements.txt.  The PyTorch serving container automatically installs deps
+from code/requirements.txt — no SAGEMAKER_TS_INSTALL_PY_DEP_PER_MODEL needed.
+
 SageMaker contract (ProcessingStep):
   /opt/ml/processing/input/model/  - model.tar.gz (needed so that
         processingjobconfig.json contains the S3 URI)
@@ -19,6 +23,8 @@ Environment variables:
 
 import json
 import os
+import tarfile
+import tempfile
 from datetime import datetime, timezone
 
 import boto3
@@ -33,6 +39,54 @@ def load_evaluation_metrics(bucket):
     s3 = boto3.client("s3")
     resp = s3.get_object(Bucket=bucket, Key=EVALUATION_KEY)
     return json.loads(resp["Body"].read().decode("utf-8"))
+
+
+def repack_model_with_code_dir(model_data_uri, region):
+    """Download model.tar.gz, add a code/ directory, and re-upload.
+
+    The PyTorch serving container looks for code/inference.py and
+    code/requirements.txt and installs deps automatically.  This
+    avoids the unreliable SAGEMAKER_TS_INSTALL_PY_DEP_PER_MODEL env var.
+
+    Returns the S3 URI of the repacked model archive.
+    """
+    s3 = boto3.client("s3", region_name=region)
+    parts = model_data_uri.replace("s3://", "").split("/", 1)
+    src_bucket, src_key = parts[0], parts[1]
+
+    tmp_dir = tempfile.mkdtemp()
+    tar_path = os.path.join(tmp_dir, "model.tar.gz")
+    extract_dir = os.path.join(tmp_dir, "model")
+    os.makedirs(extract_dir)
+
+    # Download and extract
+    s3.download_file(src_bucket, src_key, tar_path)
+    with tarfile.open(tar_path, "r:gz") as tar:
+        tar.extractall(extract_dir)
+
+    # Move inference.py and requirements.txt into code/
+    code_dir = os.path.join(extract_dir, "code")
+    os.makedirs(code_dir, exist_ok=True)
+    for filename in ["inference.py", "requirements.txt"]:
+        src = os.path.join(extract_dir, filename)
+        if os.path.exists(src):
+            os.rename(src, os.path.join(code_dir, filename))
+
+    print(f"Repacked model contents: {os.listdir(extract_dir)}")
+    print(f"  code/ contents: {os.listdir(code_dir)}")
+
+    # Re-pack
+    repacked_path = os.path.join(tmp_dir, "repacked.tar.gz")
+    with tarfile.open(repacked_path, "w:gz") as tar:
+        for item in os.listdir(extract_dir):
+            tar.add(os.path.join(extract_dir, item), arcname=item)
+
+    # Upload alongside original
+    repacked_key = src_key.replace("model.tar.gz", "model-repacked.tar.gz")
+    s3.upload_file(repacked_path, src_bucket, repacked_key)
+    repacked_uri = f"s3://{src_bucket}/{repacked_key}"
+    print(f"Uploaded repacked model to {repacked_uri}")
+    return repacked_uri
 
 
 def main():
@@ -57,15 +111,15 @@ def main():
     model_name = f"edtriage-{timestamp}"
     config_name = f"edtriage-config-{timestamp}"
 
+    # Repack model archive with code/ directory for automatic dep installation
+    repacked_uri = repack_model_with_code_dir(model_data_uri, region)
+
     # 1. Create SageMaker Model
     sm.create_model(
         ModelName=model_name,
         PrimaryContainer={
             "Image": container_image,
-            "ModelDataUrl": model_data_uri,
-            "Environment": {
-                "SAGEMAKER_TS_INSTALL_PY_DEP_PER_MODEL": "True",
-            },
+            "ModelDataUrl": repacked_uri,
         },
         ExecutionRoleArn=role_arn,
     )
@@ -114,7 +168,7 @@ def main():
     champion_metrics = {
         "macro_f1": new_macro_f1,
         "architecture": architecture,
-        "model_data_uri": model_data_uri,
+        "model_data_uri": repacked_uri,
         "model_name": model_name,
         "endpoint_name": endpoint_name,
         "endpoint_config_name": config_name,
