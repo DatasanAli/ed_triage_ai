@@ -15,6 +15,7 @@ SageMaker contract:
 import json
 import os
 import glob
+import shutil
 
 import numpy as np
 import pandas as pd
@@ -211,6 +212,7 @@ def main():
     train_df = load_split(TRAIN_DIR)
     val_df   = load_split(VAL_DIR)
     print(f"Train rows: {len(train_df)}, Val rows: {len(val_df)}")
+    print(f"Train columns: {list(train_df.columns)}")
 
     y_train = train_df["triage_3class"].values
     y_val   = val_df["triage_3class"].values
@@ -283,7 +285,8 @@ def main():
             logits = model(input_ids, attention_mask)
             correct += (logits.argmax(dim=1) == labels).sum().item()
             total   += labels.size(0)
-    print(f"Validation accuracy: {correct/total:.4f}")
+    val_acc = correct / total
+    print(f"Validation accuracy: {val_acc:.4f}")
 
     # ── Save model ────────────────────────────────────────────────────────────
     os.makedirs(MODEL_DIR, exist_ok=True)
@@ -295,8 +298,43 @@ def main():
     with open(stats_path, "w") as f:
         json.dump(stats, f, indent=2)
 
+    # Save config (mirrors arch4 contract so evaluate.py works uniformly)
+    config = {
+        "architecture": "mock",
+        "description": "bert-tiny mock model for smoke testing",
+        "bert_model": BERT_MODEL,
+        "hyperparameters": {
+            "epochs": NUM_EPOCHS,
+            "batch_size": BATCH_SIZE,
+            "lr": LR,
+            "max_len": MAX_LEN,
+        },
+        "val_metrics": {
+            "best_val_macro_f1": round(val_acc, 4),
+            "final_macro_f1": round(val_acc, 4),
+            "final_critical_f1": 0.0,
+            "roc_auc_ovr": 0.0,
+        },
+    }
+    config_path = os.path.join(MODEL_DIR, "config.json")
+    with open(config_path, "w") as f:
+        json.dump(config, f, indent=2)
+
+    # Copy inference.py into model archive so SageMaker serving can find it
+    inference_src = os.path.join(os.path.dirname(__file__), "inference.py")
+    inference_dst = os.path.join(MODEL_DIR, "inference.py")
+    shutil.copy2(inference_src, inference_dst)
+
+    # Write requirements.txt for the inference container (transformers is not pre-installed)
+    req_path = os.path.join(MODEL_DIR, "requirements.txt")
+    with open(req_path, "w") as f:
+        f.write("transformers==4.40.2\n")
+
     print(f"Saved model     → {model_path}")
     print(f"Saved stats     → {stats_path}")
+    print(f"Saved config    → {config_path}")
+    print(f"Copied inference → {inference_dst}")
+    print(f"Saved requirements → {req_path}")
     print("Mock training complete.")
 
 

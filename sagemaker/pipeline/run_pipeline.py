@@ -2,15 +2,31 @@
 Upsert and execute the SageMaker Pipeline.
 
 Usage (smoke test — auto-skips preprocessing if splits already exist):
-    python pipeline/run_pipeline.py
+    python sagemaker/pipeline/run_pipeline.py \\
+        --architecture mock \\
+        --training-instance-type ml.m5.xlarge \\
+        --epochs 1
 
 Force preprocessing even if splits exist:
-    python pipeline/run_pipeline.py --force-preprocess
+    python sagemaker/pipeline/run_pipeline.py \\
+        --architecture mock \\
+        --training-instance-type ml.m5.xlarge \\
+        --epochs 1 \\
+        --force-preprocess
 
 Real arch4 training on GPU:
-    python pipeline/run_pipeline.py \\
-        --training-script train_arch4.py \\
-        --training-instance-type ml.g5.xlarge
+    python sagemaker/pipeline/run_pipeline.py \\
+        --architecture arch4 \\
+        --training-instance-type ml.g5.xlarge \\
+        --epochs 20
+
+Deploy to a specific endpoint:
+    python sagemaker/pipeline/run_pipeline.py \\
+        --architecture arch4 \\
+        --training-instance-type ml.g5.xlarge \\
+        --epochs 20 \\
+        --endpoint-name edtriage-live \\
+        --endpoint-instance-type ml.m5.xlarge
 """
 
 import argparse
@@ -38,13 +54,19 @@ def main():
     parser.add_argument("--region", default=DEFAULT_REGION)
     parser.add_argument("--bucket", default=DEFAULT_BUCKET, help="S3 bucket")
     parser.add_argument("--pipeline-name", default="edtriage-train-pipeline")
-    parser.add_argument("--training-script", default="train_mock.py", help="Training script name")
-    parser.add_argument("--preprocessing-script", default="preprocess.py", help="Preprocessing script name")
-    parser.add_argument("--training-instance-type", required=True, help="Training instance type (e.g.: ml.g5.xlarge for GPU)")
+    parser.add_argument("--architecture", required=True,
+                        help="Model architecture to train (e.g. mock, arch4)")
+    parser.add_argument("--training-instance-type", required=True,
+                        help="Training instance type (e.g.: ml.g5.xlarge for GPU)")
     parser.add_argument("--epochs", type=int, required=True, help="Number of training epochs")
-    parser.add_argument("--input-data-uri", default=None, help="Override InputDataUri for preprocessing")
+    parser.add_argument("--input-data-uri", default=None,
+                        help="Override InputDataUri for preprocessing")
     parser.add_argument("--force-preprocess", action="store_true",
                         help="Re-run preprocessing even if splits already exist in S3")
+    parser.add_argument("--endpoint-instance-type", default="ml.m5.xlarge",
+                        help="Instance type for the inference endpoint (default: ml.m5.xlarge)")
+    parser.add_argument("--endpoint-name", default="edtriage-live",
+                        help="Name of the SageMaker endpoint to create/update (default: edtriage-live)")
     args = parser.parse_args()
 
     # ── Decide whether to skip preprocessing ─────────────────────────────────
@@ -62,12 +84,12 @@ def main():
         role=args.role,
         epochs=args.epochs,
         training_instance_type_str=args.training_instance_type,
+        architecture=args.architecture,
         region=args.region,
         default_bucket=args.bucket,
         pipeline_name=args.pipeline_name,
-        training_script=args.training_script,
-        preprocessing_script=args.preprocessing_script,
         skip_preprocessing=skip_preprocessing,
+        endpoint_instance_type_str=args.endpoint_instance_type,
     )
 
     # ── Upsert (create or update) ─────────────────────────────────────────────
@@ -80,6 +102,10 @@ def main():
         execution_params["TrainingInstanceType"] = args.training_instance_type
     if args.input_data_uri and not skip_preprocessing:
         execution_params["InputDataUri"] = args.input_data_uri
+    if args.endpoint_instance_type:
+        execution_params["EndpointInstanceType"] = args.endpoint_instance_type
+    if args.endpoint_name:
+        execution_params["EndpointName"] = args.endpoint_name
 
     # ── Start execution ───────────────────────────────────────────────────────
     print(f"Starting execution with overrides: {execution_params or '(defaults)'}")

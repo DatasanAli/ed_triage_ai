@@ -24,6 +24,7 @@ import json
 import math
 import os
 import random
+import shutil
 import warnings
 
 import joblib
@@ -633,6 +634,13 @@ def main():
     }
     with open(os.path.join(MODEL_DIR, "config.json"), "w") as f:
         json.dump(config, f, indent=2)
+
+    # Copy inference.py into model archive if it exists
+    inference_src = os.path.join(os.path.dirname(__file__), "inference.py")
+    if os.path.exists(inference_src):
+        inference_dst = os.path.join(MODEL_DIR, "inference.py")
+        shutil.copy2(inference_src, inference_dst)
+        print(f"Copied inference → {inference_dst}")
 
     print("\nAll artifacts saved. Training complete.")
 
