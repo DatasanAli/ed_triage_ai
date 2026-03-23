@@ -33,7 +33,8 @@ ROOT = Path(__file__).resolve().parent.parent.parent  # project root (ed_triage_
 DATA_DIR = ROOT / "data"
 OUTPUT_DIR = Path(__file__).resolve().parent  # src/embeddings/
 
-INPUT_CSV = DATA_DIR / "consolidated_dataset_PMH.csv"
+INPUT_CSV     = DATA_DIR / "consolidated_dataset_features.csv"
+OUTCOMES_CSV  = DATA_DIR / "consolidated_dataset_PMH.csv"  # outcome fields not in features
 OUTPUT_JSONL = OUTPUT_DIR / "cases_for_embedding.jsonl"
 STATS_FILE = OUTPUT_DIR / "data_prep_stats.json"
 
@@ -202,6 +203,8 @@ def build_metadata(row: pd.Series, vitals: dict) -> dict:
         "resp_rate": vitals.get("resprate"),
         "temp": vitals.get("temperature"),
         "spo2": vitals.get("o2sat"),
+        # HPI stored in metadata for LLM synthesis context (not used in embedding)
+        "hpi": clean_text(row["HPI"])[:1000] if pd.notna(row.get("HPI")) else "",
     }
 
 
@@ -213,6 +216,15 @@ def main():
     print(f"Loading dataset from {INPUT_CSV} ...")
     df = pd.read_csv(INPUT_CSV)
     print(f"  Loaded {len(df)} rows, {len(df.columns)} columns")
+
+    # Join outcome fields from PMH.csv (disposition, diagnosis, icd)
+    # These are not in features.csv but are needed for Pinecone metadata
+    print(f"Joining outcome fields from {OUTCOMES_CSV} ...")
+    df_pmh = pd.read_csv(OUTCOMES_CSV, usecols=[
+        "stay_id", "disposition", "primary_diagnosis", "icd_code", "icd_title"
+    ])
+    df = df.merge(df_pmh, on="stay_id", how="left")
+    print(f"  After join: {len(df)} rows")
 
     # Counters for the stats report
     stats = {

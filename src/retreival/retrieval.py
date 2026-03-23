@@ -345,6 +345,8 @@ class EDTriageRAG:
 
             lines.append(f"  Diagnosis: {m.get('icd_title', 'unknown')}")
             lines.append(f"  Outcome: {m.get('disposition', 'unknown')}")
+            if m.get("hpi"):
+                lines.append(f"  History: {m['hpi'][:300]}...")
             lines.append("")
 
         return "\n".join(lines)
