@@ -656,6 +656,7 @@ def main():
         f.write("lightgbm==4.3.0\n")
         f.write("joblib>=1.3.0\n")
         f.write("scikit-learn>=1.3.0\n")
+        f.write("shap>=0.44.0\n")
     print(f"Saved requirements → {req_path}")
 
     print("\nAll artifacts saved. Training complete.")
