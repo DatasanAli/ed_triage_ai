@@ -307,13 +307,43 @@ def predict_fn(input_data, model_dict):
         probs = torch.softmax(logits, dim=-1).squeeze(0)
 
     predicted_class = int(probs.argmax())
+    predicted_name  = CLASS_NAMES[predicted_class]
+
+    # ── Top 5 features by |SHAP| for the predicted class ────────────────────
+    pred_shap = shap_per_class[:, predicted_class]  # (15,)
+    top_idx   = np.argsort(np.abs(pred_shap))[::-1][:5]
+    top_features = [
+        {
+            "feature":   STRUCTURED_FEATURES[i],
+            "shap":      round(float(pred_shap[i]), 5),
+            "direction": f"toward {predicted_name}" if pred_shap[i] > 0 else f"away from {predicted_name}",
+        }
+        for i in top_idx
+    ]
+
+    # ── Safety flag: structured risk scores conflict with low-acuity label ──
+    # NEWS2 >= 7 = High Risk; MEWS >= 5 = High Risk
+    news2 = row["news2_score"]
+    mews  = row["mews_score"]
+    safety_flag = (predicted_class == 2) and (news2 >= 7 or mews >= 5)
+    safety_reason = (
+        f"NEWS2={int(news2)} (High Risk) conflicts with {predicted_name} prediction"
+        if safety_flag and news2 >= 7
+        else f"MEWS={int(mews)} (High Risk) conflicts with {predicted_name} prediction"
+        if safety_flag
+        else None
+    )
+
     return {
         "predicted_class": predicted_class,
-        "predicted_label": CLASS_NAMES[predicted_class],
+        "predicted_label": predicted_name,
         "probabilities": {
             name: round(float(p), 4) for name, p in zip(CLASS_NAMES, probs)
         },
-        "lgbm_shap": lgbm_shap,
+        "top_features":  top_features,
+        "safety_flag":   safety_flag,
+        "safety_reason": safety_reason,
+        "lgbm_shap":     lgbm_shap,
     }
 
 
