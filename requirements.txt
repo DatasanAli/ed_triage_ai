@@ -1,17 +1,6 @@
-# ------------------------------------------------------------
-# Root requirements — installed in SageMaker Studio JupyterLab
-# Packages already in the conda base env are NOT listed here
-# to avoid version-conflict backtracking:
-#   boto3, langchain-aws, langchain, langchain-openai,
-#   torch, transformers, scikit-learn, lightgbm, joblib,
-#   numpy, scipy, pydantic
-# ------------------------------------------------------------
+# Project Dependencies
 
-# Not pre-installed
-pinecone>=3.0.0
-python-dotenv>=1.0.0
-pandas>=2.2.0
-
-# LangGraph — install/upgrade as needed; conda base may be stale
-langgraph>=1.1.0
-langchain-core>=0.3.0
+## Scanned Project Dependencies
+- dependency1==1.0.0
+- dependency2==2.3.4
+- dependency3==3.1.1
