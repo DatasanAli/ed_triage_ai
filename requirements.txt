@@ -1,17 +1,17 @@
-boto3==1.34.0
+# ------------------------------------------------------------
+# Root requirements — installed in SageMaker Studio JupyterLab
+# Packages already in the conda base env are NOT listed here
+# to avoid version-conflict backtracking:
+#   boto3, langchain-aws, langchain, langchain-openai,
+#   torch, transformers, scikit-learn, lightgbm, joblib,
+#   numpy, scipy, pydantic
+# ------------------------------------------------------------
+
+# Not pre-installed
 pinecone>=3.0.0
-pandas==2.2.3
-numpy==1.26.4
-python-dotenv==1.0.0
+python-dotenv>=1.0.0
+pandas>=2.2.0
 
-# LangGraph agent graph
-langgraph==1.1.0
-langchain-aws>=0.2.0
+# LangGraph — install/upgrade as needed; conda base may be stale
+langgraph>=1.1.0
 langchain-core>=0.3.0
-
-# Model inference
-torch>=2.0.0
-transformers>=4.40.0
-joblib>=1.3.0
-lightgbm>=4.0.0
-scikit-learn==1.7.2
