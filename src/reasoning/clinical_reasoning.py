@@ -40,7 +40,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 AWS_REGION  = os.getenv("AWS_REGION", "us-east-1")
-AWS_PROFILE = os.getenv("AWS_PROFILE", "ed-triage")
+AWS_PROFILE = os.getenv("AWS_PROFILE")  # None in SageMaker — uses instance role
 
 # Claude claude-sonnet-4-6 via Bedrock
 MODEL_ID = "us.anthropic.claude-sonnet-4-6"
