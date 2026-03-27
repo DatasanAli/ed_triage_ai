@@ -26,8 +26,8 @@ class TriageState(TypedDict):
       heart_rate (float), systolic_bp (float), diastolic_bp (float),
       resp_rate (float), temperature (float), spo2 (float)
 
-    Optional keys (used by model_runner for richer inference):
-      pain (float)             — pain score 0-10; omit or None -> imputed to median
+    Optional keys:
+      pain (float)             — pain score 0-10
       arrival_transport (str)  — "WALK IN" | "AMBULANCE" | "HELICOPTER" | "UNKNOWN"
       hpi (str)                — history of present illness free text
     """
@@ -91,7 +91,7 @@ class TriageState(TypedDict):
     """
     Top SHAP features from the model endpoint response (top_features field).
     Each element: {"feature": str, "shap": float, "direction": "toward/away from <label>"}.
-    None when prediction was supplied as raw probs/class without SHAP (e.g. ModelRunner path).
+    None when the endpoint response did not include SHAP features.
     Passed to analyze_node to surface internal model evidence in the LLM prompt.
     """
 

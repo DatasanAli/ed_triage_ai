@@ -197,25 +197,21 @@ def _reconcile(model_class: int, llm_esi: int | None) -> tuple[int, str]:
 
 def predict_node(state: TriageState) -> dict:
     """
-    Normalize and annotate the arch4 model prediction.
+    Normalize and annotate the SageMaker endpoint prediction.
 
-    Reads : state["prediction"] (optional), state["patient"]
+    Reads : state["prediction"] (required — must be supplied by the caller
+            from the live SageMaker endpoint before invoking the graph)
     Writes: state["model_output"], state["shap_features"],
             state["safety_flag"], state["safety_reason"]
 
-    Two modes:
-      1. Prediction pre-supplied — state["prediction"] is a dict/list ->
-         normalize it directly via ModelPrediction.normalize() (fast, no I/O).
-      2. Prediction absent — state["prediction"] is None ->
-         ModelRunner.get().predict() runs the full model pipeline,
-         loading artifacts from S3 on the first call (cold start ~30-60 s).
+    Also extracts top_features (SHAP), safety_flag, and safety_reason from
+    the endpoint response dict and handles the endpoint's dict-format
+    probabilities, converting them to the list format ModelPrediction expects.
 
-    When the full SageMaker endpoint response is supplied as prediction, this node
-    also extracts top_features (SHAP), safety_flag, and safety_reason so that
-    analyze_node can surface them in the LLM prompt. It also handles the endpoint's
-    dict-format probabilities, converting them to the list format ModelPrediction expects.
+    Raises ValueError immediately if state["prediction"] is None — the caller
+    is required to invoke the SageMaker endpoint and pass the result in.
 
-    If either path fails, writes an error to state["errors"] and returns a
+    If normalization fails, writes an error to state["errors"] and returns a
     safe fallback (L3-Urgent, uncertainty flagged) so the graph continues.
     """
     new_errors    = []
@@ -227,9 +223,10 @@ def predict_node(state: TriageState) -> dict:
         raw_prediction = state.get("prediction")
 
         if raw_prediction is None:
-            # Run the model — loads S3 artifacts on first call (singleton)
-            from .model_runner import ModelRunner
-            raw_prediction = ModelRunner.get().predict(state["patient"])
+            raise ValueError(
+                "state['prediction'] is required — invoke the SageMaker endpoint "
+                "and pass its response before calling the triage graph."
+            )
 
         # Extract supplementary fields from a full endpoint response dict
         if isinstance(raw_prediction, dict):
