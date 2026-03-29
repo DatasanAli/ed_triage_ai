@@ -3,3 +3,4 @@ pinecone-client==3.0.0
 pandas==2.1.0
 numpy==1.24.0
 python-dotenv==1.0.0
+streamlit>=1.30.0
