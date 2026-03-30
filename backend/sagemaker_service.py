@@ -112,6 +112,8 @@ def invoke_endpoint(request: TriageRequest) -> dict[str, Any]:
     model_used = request.model or settings.default_model
     sm_payload = transform_request(request)
 
+    logger.info("Request payload (SageMaker format): %s", json.dumps(sm_payload, indent=2))
+
     if settings.use_mock:
         logger.info("Using mock SageMaker response (TRIAGE_USE_MOCK=True)")
         raw_response = copy.deepcopy(MOCK_SAGEMAKER_RESPONSE)
@@ -129,4 +131,6 @@ def invoke_endpoint(request: TriageRequest) -> dict[str, Any]:
         )
         raw_response = json.loads(sm_result["Body"].read().decode("utf-8"))
 
-    return transform_response(raw_response, model_used)
+    result = transform_response(raw_response, model_used)
+    logger.info("Response payload (frontend format): %s", json.dumps(result, indent=2))
+    return result

@@ -418,6 +418,7 @@ def inject_css():
 
     /* hide default streamlit labels — we use custom HTML labels */
     [data-testid="stNumberInput"] label,
+    [data-testid="stTextInput"] label,
     [data-testid="stSelectbox"] label {
         display: none !important;
     }
@@ -665,6 +666,64 @@ def inject_css():
 
     /* Make text area label hidden since we use custom */
     [data-testid="stTextArea"] label { display: none !important; }
+
+    /* ── Force sidebar to always be visible ────────────────────── */
+    /* Override Streamlit's collapsed transform so sidebar is always open */
+    section[data-testid="stSidebar"] {
+        min-width: 244px !important;
+        transform: none !important;
+        left: 0 !important;
+        visibility: visible !important;
+    }
+    /* Hide only the buttons that trigger collapsing — not the reopen chevron */
+    [data-testid="stSidebarCollapseButton"],
+    button[aria-label="Close sidebar"],
+    button[aria-label="Collapse sidebar"] {
+        display: none !important;
+    }
+    /* Also hide the floating reopen chevron (sidebar is always open now) */
+    [data-testid="collapsedControl"] {
+        display: none !important;
+    }
+
+    /* ── Fix unclickable buttons below HTML markdown blocks ─────── */
+    /* Raise Streamlit buttons above any HTML overlay divs */
+    [data-testid="stButton"] {
+        position: relative !important;
+        z-index: 10 !important;
+    }
+
+    /* ── Sidebar nav buttons — match .nav-item look ─────────────── */
+    [data-testid="stSidebar"] [data-testid="stButton"] {
+        margin: 0 !important;
+        padding: 0 !important;
+    }
+    [data-testid="stSidebar"] [data-testid="stButton"] > button,
+    [data-testid="stSidebar"] [data-testid="stButton"] > button:not([kind="primary"]) {
+        background: transparent !important;
+        color: #475569 !important;
+        border: none !important;
+        border-radius: 0 !important;
+        padding: 12px 24px !important;
+        font-weight: 500 !important;
+        font-size: 14px !important;
+        box-shadow: none !important;
+        text-align: left !important;
+        justify-content: flex-start !important;
+        width: 100% !important;
+        border-right: 4px solid transparent !important;
+        transition: all 0.15s !important;
+    }
+    [data-testid="stSidebar"] [data-testid="stButton"] > button:hover {
+        background: #f1f5f9 !important;
+        color: #0f172a !important;
+    }
+    [data-testid="stSidebar"] [data-testid="stButton"].nav-active > button {
+        background: #eff6ff !important;
+        color: #1d4ed8 !important;
+        border-right-color: #1d4ed8 !important;
+        font-weight: 600 !important;
+    }
     </style>
     """, unsafe_allow_html=True)
 
@@ -674,10 +733,10 @@ def inject_css():
 def render_sidebar():
     with st.sidebar:
         active_page = st.session_state.get("page", "intake")
-        intake_cls = "active" if active_page == "intake" else ""
         results_cls = "active" if active_page == "results" else ""
 
-        st.markdown(f"""
+        # Logo (static HTML)
+        st.markdown("""
         <div class="sidebar-logo">
             <div class="sidebar-logo-icon">&#10010;</div>
             <div>
@@ -685,48 +744,23 @@ def render_sidebar():
                 <p>Station 4</p>
             </div>
         </div>
-        <div class="nav-item {intake_cls}">
-            <span class="nav-icon">&#128100;</span> Patient Intake
-        </div>
-        <div class="nav-item {results_cls}">
-            <span class="nav-icon">&#128336;</span> Recent Triage
-        </div>
         """, unsafe_allow_html=True)
 
-        # ── Recent Triage history ──────────────────────────────
-        history = st.session_state.get("triage_history", [])
-        if history:
-            for entry in history[:5]:  # show last 5
-                result = entry.get("result", {})
-                label = result.get("predicted_label", "Unknown")
-                notes_preview = entry.get("triage_notes", "")[:60]
-                timestamp = entry.get("timestamp", "")
-                # pick label colour class
-                if "L1" in label:
-                    lbl_cls = ""
-                elif "L2" in label:
-                    lbl_cls = "l2"
-                else:
-                    lbl_cls = "l3"
-                st.markdown(f"""
-                <div class="history-item">
-                    <div class="history-label {lbl_cls}">{label}</div>
-                    <div class="history-notes">{notes_preview}{"…" if len(entry.get("triage_notes","")) > 60 else ""}</div>
-                    <div class="history-time">{timestamp}</div>
-                </div>
-                """, unsafe_allow_html=True)
+        # ── Patient Intake — real button for navigation ────────
+        if active_page == "intake":
+            st.markdown('<div class="nav-item active"><span class="nav-icon">&#128100;</span> Patient Intake</div>', unsafe_allow_html=True)
         else:
-            st.markdown("""
-            <div style="padding: 12px 24px; font-size: 12px; color: #94a3b8;">
-                No triage history yet.
-            </div>
-            """, unsafe_allow_html=True)
+            if st.button("\U0001f464  Patient Intake", key="nav_intake_btn", use_container_width=True):
+                for key in ["triage_notes", "age", "heart_rate", "resp_rate",
+                            "sbp", "dbp", "spo2", "temp_f", "pain",
+                            "arrival_transport", "form_data", "triage_result"]:
+                    if key in st.session_state:
+                        del st.session_state[key]
+                st.session_state.page = "intake"
+                st.rerun()
 
-        st.markdown("""
-        <div class="nav-item">
-            <span class="nav-icon">&#128202;</span> Analytics
-        </div>
-        """, unsafe_allow_html=True)
+        # ── Triage History nav label ───────────────────────────
+        st.markdown(f'<div class="nav-item {results_cls}"><span class="nav-icon">&#128336;</span> Triage History</div>', unsafe_allow_html=True)
 
         # Push footer to bottom with spacer
         st.markdown("<div style='flex:1; min-height:200px;'></div>",
@@ -801,6 +835,17 @@ def render_intake_page():
         <div class="section-label secondary">Diagnostic Layer</div>
         <div class="section-title">Optional Vitals</div>
         """, unsafe_allow_html=True)
+
+        # First Name | Last Name
+        n1, n2 = st.columns(2)
+        with n1:
+            st.markdown('<div class="vital-label">First Name</div>', unsafe_allow_html=True)
+            st.text_input("First Name", key="first_name", placeholder="Jane",
+                          label_visibility="collapsed")
+        with n2:
+            st.markdown('<div class="vital-label">Last Name</div>', unsafe_allow_html=True)
+            st.text_input("Last Name", key="last_name", placeholder="Smith",
+                          label_visibility="collapsed")
 
         # Age — full width
         st.markdown('<div class="vital-label">Age</div>', unsafe_allow_html=True)
@@ -905,6 +950,8 @@ def render_intake_page():
         if st.button("&#10004;  Complete Triage Assessment", type="primary",
                      use_container_width=True, key="submit_btn"):
             form_data = {
+                "first_name": st.session_state.get("first_name", ""),
+                "last_name": st.session_state.get("last_name", ""),
                 "triage_notes": st.session_state.get("triage_notes", ""),
                 "age": st.session_state.get("age"),
                 "heart_rate": st.session_state.get("heart_rate"),
@@ -919,11 +966,13 @@ def render_intake_page():
             }
             st.session_state.form_data = form_data
 
-            # POST to /predict
+            # POST to /predict — exclude display-only fields from ML payload
             with st.spinner("Analyzing triage data..."):
                 try:
-                    # Filter out None values before sending
-                    payload = {k: v for k, v in form_data.items() if v is not None}
+                    _backend_keys = {"triage_notes", "age", "heart_rate", "resp_rate",
+                                     "sbp", "dbp", "spo2", "temp_f", "pain", "arrival_transport"}
+                    payload = {k: v for k, v in form_data.items()
+                               if k in _backend_keys and v is not None}
                     import json as _json
                     print(f"[TriagePulse] → POST {BACKEND_URL}/predict")
                     print(f"[TriagePulse]   payload: {_json.dumps(payload, indent=2)}")
@@ -1129,12 +1178,18 @@ def render_results_page():
 
     with right_col:
         # Patient mini-profile derived from submitted form_data
+        first_name = form_data.get("first_name", "").strip()
+        last_name = form_data.get("last_name", "").strip()
+        if first_name or last_name:
+            patient_name = f"{first_name} {last_name}".strip()
+        else:
+            patient_name = "Current Patient"
         st.markdown(f"""
         <div class="patient-card">
             <div class="patient-header">
                 <div class="patient-avatar">&#128100;</div>
                 <div>
-                    <div class="patient-name">Current Patient</div>
+                    <div class="patient-name">{patient_name}</div>
                     <div class="patient-meta">{age_display} &bull; Submitted {datetime.now(timezone.utc).strftime("%H:%M UTC")}</div>
                 </div>
             </div>
