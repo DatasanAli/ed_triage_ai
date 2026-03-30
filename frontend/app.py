@@ -3,64 +3,79 @@ TriagePulse — Emergency Department Triage Assistant (Streamlit UI).
 
 Single-file Streamlit app with two views:
   1. Intake form — collects triage notes + optional vitals
-  2. Results    — displays hardcoded mock triage prediction
+  2. Results    — displays triage prediction returned by the FastAPI backend
 
 Run with:  streamlit run frontend/app.py
 """
 
 import streamlit as st
+import requests
 from datetime import datetime, timezone
 
-# ── Mock prediction data (no backend) ─────────────────────────────────────────
-
-MOCK_RESULT = {
-    "predicted_class": 0,
-    "predicted_label": "L1-Critical",
-    "probabilities": {
-        "L1-Critical": 0.942,
-        "L2-Emergent": 0.051,
-        "L3-Urgent/LessUrgent": 0.007,
-    },
-}
-
-MOCK_PATIENT = {
-    "last": "DOE",
-    "first": "JONATHAN",
-    "mrn": "99420-B",
-    "age": 54,
-    "sex": "MALE",
-}
-
-MOCK_VITALS_DISPLAY = {"heart_rate": 132, "bp": "88/52"}
-
-MOCK_DRIVERS = [
-    {
-        "title": "Severe Hypoxemia",
-        "detail": "SpO2: 84% on RA (Trending Down)",
-        "icon": "&#9888;",
-        "critical": True,
-    },
-    {
-        "title": "Sinus Tachycardia",
-        "detail": "HR: 132 bpm persistent",
-        "icon": "&#9829;",
-        "critical": False,
-    },
-    {
-        "title": "Altered Mental Status",
-        "detail": "GCS: 11 (V:3, M:5, E:3)",
-        "icon": "&#9673;",
-        "critical": False,
-    },
-]
-
-MOCK_RECOMMENDATIONS = [
-    "Activate Rapid Response / Resuscitation Team immediately.",
-    "Prepare point-of-care ultrasound (POCUS) at bedside.",
-    "Order immediate ABG, Lactate, and CBC/CMP panels.",
-]
+# ── Backend ───────────────────────────────────────────────────────────────────
+BACKEND_URL = "http://localhost:8000"
 
 TRANSPORT_OPTIONS = ["Walk In", "Ambulance", "Helicopter", "Unknown"]
+
+
+# ── Helpers ───────────────────────────────────────────────────────────────────
+
+# Map backend feature names to friendly display names
+FEATURE_DISPLAY_NAMES = {
+    "spo2": "SpO2 (Oxygen Saturation)",
+    "heart_rate": "Heart Rate",
+    "shock_index": "Shock Index",
+    "news2_score": "NEWS2 Score",
+    "sbp": "Systolic BP",
+    "dbp": "Diastolic BP",
+    "resp_rate": "Respiratory Rate",
+    "age": "Age",
+    "temp_f": "Temperature (°F)",
+    "pain": "Pain Score",
+    "arrival_transport": "Arrival Transport",
+}
+
+
+def shap_features_to_drivers(top_features: list) -> list:
+    """Convert TriageResponse top_features (SHAP) to driver dicts for the UI."""
+    drivers = []
+    for feat in top_features:
+        name = feat.get("feature", "")
+        shap_val = feat.get("shap", 0.0)
+        direction = feat.get("direction", "")
+        display_name = FEATURE_DISPLAY_NAMES.get(name, name.replace("_", " ").title())
+        is_critical = abs(shap_val) >= 0.15  # treat high-impact SHAP as critical
+        icon = "&#9888;" if is_critical else "&#9829;"
+        detail = f"SHAP: {shap_val:+.4f} — {direction}"
+        drivers.append({
+            "title": display_name,
+            "detail": detail,
+            "icon": icon,
+            "critical": is_critical,
+        })
+    return drivers
+
+
+def label_to_recommendations(predicted_label: str) -> list:
+    """Return protocol recommendations based on predicted triage label."""
+    if "L1" in predicted_label or "Critical" in predicted_label:
+        return [
+            "Activate Rapid Response / Resuscitation Team immediately.",
+            "Prepare point-of-care ultrasound (POCUS) at bedside.",
+            "Order immediate ABG, Lactate, and CBC/CMP panels.",
+        ]
+    elif "L2" in predicted_label or "Emergent" in predicted_label:
+        return [
+            "Assign to monitored ED bed within 15 minutes.",
+            "Obtain 12-lead ECG and point-of-care labs.",
+            "Notify attending physician for prompt evaluation.",
+        ]
+    else:
+        return [
+            "Place in waiting area with standard monitoring.",
+            "Reassess vitals every 30 minutes.",
+            "Initiate symptom-directed workup as needed.",
+        ]
 
 
 # ── CSS injection ─────────────────────────────────────────────────────────────
@@ -164,6 +179,29 @@ def inject_css():
         margin: 16px 0;
     }
     .nav-footer { margin-top: auto; }
+
+    /* ── History item in sidebar ───────────────────────────────── */
+    .history-item {
+        padding: 10px 24px;
+        border-bottom: 1px solid #f1f5f9;
+        cursor: default;
+    }
+    .history-label {
+        font-family: 'Public Sans', sans-serif;
+        font-size: 10px; font-weight: 700;
+        text-transform: uppercase; letter-spacing: 0.5px;
+        color: var(--tertiary); margin-bottom: 2px;
+    }
+    .history-label.l2 { color: var(--primary); }
+    .history-label.l3 { color: var(--secondary); }
+    .history-notes {
+        font-size: 11px; color: #475569;
+        white-space: nowrap; overflow: hidden;
+        text-overflow: ellipsis; max-width: 200px;
+    }
+    .history-time {
+        font-size: 10px; color: #94a3b8; margin-top: 2px;
+    }
 
     /* ── Top header bar ────────────────────────────────────────── */
     .top-header {
@@ -653,6 +691,38 @@ def render_sidebar():
         <div class="nav-item {results_cls}">
             <span class="nav-icon">&#128336;</span> Recent Triage
         </div>
+        """, unsafe_allow_html=True)
+
+        # ── Recent Triage history ──────────────────────────────
+        history = st.session_state.get("triage_history", [])
+        if history:
+            for entry in history[:5]:  # show last 5
+                result = entry.get("result", {})
+                label = result.get("predicted_label", "Unknown")
+                notes_preview = entry.get("triage_notes", "")[:60]
+                timestamp = entry.get("timestamp", "")
+                # pick label colour class
+                if "L1" in label:
+                    lbl_cls = ""
+                elif "L2" in label:
+                    lbl_cls = "l2"
+                else:
+                    lbl_cls = "l3"
+                st.markdown(f"""
+                <div class="history-item">
+                    <div class="history-label {lbl_cls}">{label}</div>
+                    <div class="history-notes">{notes_preview}{"…" if len(entry.get("triage_notes","")) > 60 else ""}</div>
+                    <div class="history-time">{timestamp}</div>
+                </div>
+                """, unsafe_allow_html=True)
+        else:
+            st.markdown("""
+            <div style="padding: 12px 24px; font-size: 12px; color: #94a3b8;">
+                No triage history yet.
+            </div>
+            """, unsafe_allow_html=True)
+
+        st.markdown("""
         <div class="nav-item">
             <span class="nav-icon">&#128202;</span> Analytics
         </div>
@@ -834,7 +904,7 @@ def render_intake_page():
     with center:
         if st.button("&#10004;  Complete Triage Assessment", type="primary",
                      use_container_width=True, key="submit_btn"):
-            st.session_state.form_data = {
+            form_data = {
                 "triage_notes": st.session_state.get("triage_notes", ""),
                 "age": st.session_state.get("age"),
                 "heart_rate": st.session_state.get("heart_rate"),
@@ -847,6 +917,54 @@ def render_intake_page():
                 "arrival_transport": st.session_state.get(
                     "arrival_transport", "Walk In"),
             }
+            st.session_state.form_data = form_data
+
+            # POST to /predict
+            with st.spinner("Analyzing triage data..."):
+                try:
+                    # Filter out None values before sending
+                    payload = {k: v for k, v in form_data.items() if v is not None}
+                    import json as _json
+                    print(f"[TriagePulse] → POST {BACKEND_URL}/predict")
+                    print(f"[TriagePulse]   payload: {_json.dumps(payload, indent=2)}")
+                    resp = requests.post(
+                        f"{BACKEND_URL}/predict",
+                        json=payload,
+                        timeout=30,
+                    )
+                    resp.raise_for_status()
+                    triage_result = resp.json()
+                    print(f"[TriagePulse] ← {resp.status_code} response:")
+                    print(f"[TriagePulse]   {_json.dumps(triage_result, indent=2)}")
+                except requests.exceptions.ConnectionError:
+                    st.error(
+                        f"Cannot reach the backend at {BACKEND_URL}. "
+                        "Make sure `uvicorn backend.main:app --reload --port 8000` is running."
+                    )
+                    st.stop()
+                except requests.exceptions.HTTPError as exc:
+                    st.error(
+                        f"Backend returned an error: "
+                        f"{exc.response.status_code} — {exc.response.text}"
+                    )
+                    st.stop()
+                except Exception as exc:
+                    st.error(f"Unexpected error calling backend: {exc}")
+                    st.stop()
+
+            # Store result in session state
+            st.session_state.triage_result = triage_result
+
+            # Append to history (keep last 20)
+            history_entry = {
+                "timestamp": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC"),
+                "triage_notes": form_data.get("triage_notes", ""),
+                "result": triage_result,
+            }
+            st.session_state.triage_history.insert(0, history_entry)
+            if len(st.session_state.triage_history) > 20:
+                st.session_state.triage_history = st.session_state.triage_history[:20]
+
             st.session_state.page = "results"
             st.rerun()
 
@@ -854,9 +972,47 @@ def render_intake_page():
 # ── Page 2: Results ──────────────────────────────────────────────────────────
 
 def render_results_page():
-    prob = MOCK_RESULT["probabilities"]
-    pat = MOCK_PATIENT
-    vit = MOCK_VITALS_DISPLAY
+    # Pull real data from session state — no mocks
+    triage_result = st.session_state.get("triage_result", {})
+    form_data = st.session_state.get("form_data", {})
+
+    if not triage_result:
+        st.error("No triage result found. Please complete the intake form first.")
+        if st.button("Go to Intake", key="go_intake_btn"):
+            st.session_state.page = "intake"
+            st.rerun()
+        return
+
+    prob = triage_result.get("probabilities", {
+        "L1-Critical": 0.0, "L2-Emergent": 0.0, "L3-Urgent/LessUrgent": 0.0
+    })
+    predicted_label = triage_result.get("predicted_label", "Unknown")
+    model_used = triage_result.get("model_used", "arch4")
+    safety_flag = triage_result.get("safety_flag", False)
+    safety_reason = triage_result.get("safety_reason", None)
+    top_features = triage_result.get("top_features", [])
+
+    # Derive UI data from real backend response
+    drivers = shap_features_to_drivers(top_features)
+    recommendations = label_to_recommendations(predicted_label)
+
+    # Patient vitals from submitted form_data
+    hr_val = form_data.get("heart_rate")
+    sbp_val = form_data.get("sbp")
+    dbp_val = form_data.get("dbp")
+    age_val = form_data.get("age")
+    hr_display = str(hr_val) if hr_val is not None else "—"
+    bp_display = (
+        f"{sbp_val}/{dbp_val}"
+        if sbp_val is not None and dbp_val is not None
+        else "—"
+    )
+    age_display = f"{age_val}Y" if age_val is not None else ""
+
+    # Parse label for display (e.g. "L1-Critical" → level_code="L1", level_desc="CRITICAL")
+    label_parts = predicted_label.split("-", 1)
+    level_code = label_parts[0] if label_parts else predicted_label
+    level_desc = label_parts[1].upper() if len(label_parts) > 1 else ""
 
     # Breadcrumb + header
     st.markdown("""
@@ -878,24 +1034,29 @@ def render_results_page():
     </div>
     """, unsafe_allow_html=True)
 
+    # Safety flag banner
+    if safety_flag and safety_reason:
+        st.warning(f"\u26a0\ufe0f **Safety Alert:** {safety_reason}")
+
     left_col, right_col = st.columns([7, 5], gap="large")
 
     with left_col:
-        # Priority card
+        # Priority card — derived from predicted_label
         st.markdown(f"""
         <div class="priority-card">
             <div class="priority-content">
                 <div class="priority-badge">PREDICTED PRIORITY</div>
-                <div class="priority-level">L1 -<br>CRITICAL</div>
+                <div class="priority-level">{level_code} -<br>{level_desc}</div>
                 <div class="priority-desc">
-                    Immediate life-saving intervention required. System detected
-                    acute hemodynamic instability and respiratory compromise markers.
+                    Model: <strong>{model_used}</strong>. Based on submitted vitals and
+                    triage notes, the system classified this patient as
+                    <strong>{predicted_label}</strong>.
                 </div>
             </div>
             <div class="target-zone">
                 <div class="target-icon">&#9888;</div>
-                <div class="target-label">Target Zone</div>
-                <div class="target-name">Resus Bay 1</div>
+                <div class="target-label">Predicted Class</div>
+                <div class="target-name">{predicted_label}</div>
             </div>
         </div>
         """, unsafe_allow_html=True)
@@ -904,9 +1065,9 @@ def render_results_page():
         c_left, c_right = st.columns(2)
 
         with c_left:
-            l1_pct = prob["L1-Critical"] * 100
-            l2_pct = prob["L2-Emergent"] * 100
-            l3_pct = prob["L3-Urgent/LessUrgent"] * 100
+            l1_pct = prob.get("L1-Critical", 0.0) * 100
+            l2_pct = prob.get("L2-Emergent", 0.0) * 100
+            l3_pct = prob.get("L3-Urgent/LessUrgent", 0.0) * 100
             st.markdown(f"""
             <div class="confidence-section">
                 <div class="confidence-title">Confidence Breakdown</div>
@@ -942,7 +1103,7 @@ def render_results_page():
 
         with c_right:
             drivers_items = []
-            for d in MOCK_DRIVERS:
+            for d in drivers:
                 bg_cls = "critical-bg" if d["critical"] else "normal-bg"
                 icon_cls = "critical" if d["critical"] else "primary"
                 title_cls = "critical" if d["critical"] else "normal"
@@ -954,7 +1115,10 @@ def render_results_page():
                     f'<div class="driver-detail">{d["detail"]}</div>'
                     f'</div></div>'
                 )
-            drivers_html = "".join(drivers_items)
+            drivers_html = "".join(drivers_items) if drivers_items else (
+                "<p style='color:var(--on-surface-variant);font-size:13px;'>"
+                "No SHAP feature data available.</p>"
+            )
             st.markdown(
                 f'<div class="drivers-section">'
                 f'<div class="confidence-title">Clinical Drivers</div>'
@@ -964,35 +1128,35 @@ def render_results_page():
             )
 
     with right_col:
-        # Patient mini-profile
+        # Patient mini-profile derived from submitted form_data
         st.markdown(f"""
         <div class="patient-card">
             <div class="patient-header">
                 <div class="patient-avatar">&#128100;</div>
                 <div>
-                    <div class="patient-name">{pat['last']}, {pat['first']}</div>
-                    <div class="patient-meta">MRN: {pat['mrn']} &bull; {pat['age']}Y {pat['sex']}</div>
+                    <div class="patient-name">Current Patient</div>
+                    <div class="patient-meta">{age_display} &bull; Submitted {datetime.now(timezone.utc).strftime("%H:%M UTC")}</div>
                 </div>
             </div>
             <div class="vitals-grid">
                 <div class="vital-display">
                     <div class="vital-display-label">Heart Rate</div>
-                    <span class="vital-display-value">{vit['heart_rate']}</span>
+                    <span class="vital-display-value">{hr_display}</span>
                     <span class="vital-display-unit">BPM</span>
                     <span class="vital-heart-icon">&#9829;</span>
                 </div>
                 <div class="vital-display">
                     <div class="vital-display-label">BP (Sys/Dia)</div>
-                    <span class="vital-display-value">{vit['bp']}</span>
+                    <span class="vital-display-value">{bp_display}</span>
                     <span class="vital-display-unit">mmHg</span>
                 </div>
             </div>
         </div>
         """, unsafe_allow_html=True)
 
-        # Protocol recommendations
+        # Protocol recommendations — derived from predicted_label
         rec_items = []
-        for r in MOCK_RECOMMENDATIONS:
+        for r in recommendations:
             rec_items.append(
                 f'<div class="rec-item">'
                 f'<div class="rec-check">\u2713</div>'
@@ -1011,26 +1175,26 @@ def render_results_page():
         # Action buttons
         if st.button("Confirm and Record Triage", type="primary",
                      use_container_width=True, key="confirm_btn"):
-            pass  # No-op for mock
+            pass  # History already appended on submit
 
         if st.button("Triage Another Patient", use_container_width=True,
                      key="restart_btn"):
-            # Clear form data and all widget keys
+            # Clear form/result data but keep triage_history
             for key in ["triage_notes", "age", "heart_rate", "resp_rate",
                         "sbp", "dbp", "spo2", "temp_f", "pain",
-                        "arrival_transport", "form_data"]:
+                        "arrival_transport", "form_data", "triage_result"]:
                 if key in st.session_state:
                     del st.session_state[key]
             st.session_state.page = "intake"
             st.rerun()
 
-    # Footer
+    # Footer — show actual model_used from backend response
     now_utc = datetime.now(timezone.utc).strftime("%H:%M:%S UTC")
     st.markdown(f"""
     <div class="footer-bar">
         <div class="footer-left">
             <span><span class="status-dot"></span> AI Engine Online</span>
-            <span>Model: TP-Triage-V4.2</span>
+            <span>Model: {model_used}</span>
         </div>
         <span>Last Sync: {now_utc}</span>
     </div>
@@ -1049,6 +1213,8 @@ def main():
 
     if "page" not in st.session_state:
         st.session_state.page = "intake"
+    if "triage_history" not in st.session_state:
+        st.session_state.triage_history = []
 
     inject_css()
     render_sidebar()
