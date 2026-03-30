@@ -41,7 +41,7 @@ load_dotenv()
 # ---------------------------------------------------------------------------
 
 AWS_REGION = os.getenv("AWS_REGION", "us-east-1")
-AWS_PROFILE = os.getenv("AWS_PROFILE", "ed-triage")
+AWS_PROFILE = os.getenv("AWS_PROFILE")  # None in SageMaker — uses instance role
 PINECONE_SECRET_NAME = "prod/pinecone/api_key"
 PINECONE_INDEX_NAME = os.getenv("PINECONE_INDEX_NAME", "ed-triage-cases")
 TITAN_MODEL_ID = "amazon.titan-embed-text-v2:0"
@@ -345,6 +345,8 @@ class EDTriageRAG:
 
             lines.append(f"  Diagnosis: {m.get('icd_title', 'unknown')}")
             lines.append(f"  Outcome: {m.get('disposition', 'unknown')}")
+            if m.get("hpi"):
+                lines.append(f"  History: {m['hpi'][:300]}...")
             lines.append("")
 
         return "\n".join(lines)

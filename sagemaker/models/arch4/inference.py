@@ -31,6 +31,7 @@ import os
 
 import joblib
 import numpy as np
+import shap
 import torch
 import torch.nn as nn
 from transformers import AutoModel, AutoTokenizer
@@ -184,18 +185,22 @@ def model_fn(model_dir):
 
     tokenizer = AutoTokenizer.from_pretrained(bert_model_name)
 
-    # Load 5-fold LightGBM models
+    # Load 5-fold LightGBM models and build one SHAP TreeExplainer per fold
     lgbm_models = []
+    shap_explainers = []
     for i in range(1, 6):
         path = os.path.join(model_dir, f"lgbm_fold{i}.joblib")
-        lgbm_models.append(joblib.load(path))
-    print(f"Loaded {len(lgbm_models)} LightGBM fold models")
+        m = joblib.load(path)
+        lgbm_models.append(m)
+        shap_explainers.append(shap.TreeExplainer(m))
+    print(f"Loaded {len(lgbm_models)} LightGBM fold models + SHAP explainers")
 
     return {
         "model": model,
         "tokenizer": tokenizer,
         "max_len": max_len,
         "lgbm_models": lgbm_models,
+        "shap_explainers": shap_explainers,
         "config": config,
     }
 
@@ -213,6 +218,7 @@ def predict_fn(input_data, model_dict):
     tokenizer = model_dict["tokenizer"]
     max_len = model_dict["max_len"]
     lgbm_models = model_dict["lgbm_models"]
+    shap_explainers = model_dict["shap_explainers"]
     config = model_dict["config"]
 
     stats = config.get("structured_stats", {})
@@ -265,9 +271,23 @@ def predict_fn(input_data, model_dict):
         dtype=np.float32,
     )
 
-    # ── 2. LightGBM ensemble ────────────────────────────────────────────────
+    # ── 2. LightGBM ensemble + SHAP ─────────────────────────────────────────
     fold_probs = [m.predict_proba(features) for m in lgbm_models]
     lgbm_avg = np.mean(fold_probs, axis=0)  # shape (1, 3)
+
+    # SHAP values: each explainer returns (n_samples, n_features, n_classes)
+    # Average across folds, then extract the single sample (index 0)
+    fold_shap = [e.shap_values(features) for e in shap_explainers]  # list of (1, 15, 3)
+    avg_shap = np.mean(np.stack(fold_shap, axis=0), axis=0)  # (1, 15, 3)
+    shap_per_class = avg_shap[0]  # (15, 3) — one row per feature, one col per class
+
+    lgbm_shap = {
+        CLASS_NAMES[c]: {
+            STRUCTURED_FEATURES[f]: round(float(shap_per_class[f, c]), 5)
+            for f in range(len(STRUCTURED_FEATURES))
+        }
+        for c in range(NUM_CLASSES)
+    }
 
     # ── 3. Tokenize text ────────────────────────────────────────────────────
     text = input_data.get("triage_text", "")
@@ -287,12 +307,43 @@ def predict_fn(input_data, model_dict):
         probs = torch.softmax(logits, dim=-1).squeeze(0)
 
     predicted_class = int(probs.argmax())
+    predicted_name  = CLASS_NAMES[predicted_class]
+
+    # ── Top 5 features by |SHAP| for the predicted class ────────────────────
+    pred_shap = shap_per_class[:, predicted_class]  # (15,)
+    top_idx   = np.argsort(np.abs(pred_shap))[::-1][:5]
+    top_features = [
+        {
+            "feature":   STRUCTURED_FEATURES[i],
+            "shap":      round(float(pred_shap[i]), 5),
+            "direction": f"toward {predicted_name}" if pred_shap[i] > 0 else f"away from {predicted_name}",
+        }
+        for i in top_idx
+    ]
+
+    # ── Safety flag: structured risk scores conflict with low-acuity label ──
+    # NEWS2 >= 7 = High Risk; MEWS >= 5 = High Risk
+    news2 = row["news2_score"]
+    mews  = row["mews_score"]
+    safety_flag = (predicted_class == 2) and (news2 >= 7 or mews >= 5)
+    safety_reason = (
+        f"NEWS2={int(news2)} (High Risk) conflicts with {predicted_name} prediction"
+        if safety_flag and news2 >= 7
+        else f"MEWS={int(mews)} (High Risk) conflicts with {predicted_name} prediction"
+        if safety_flag
+        else None
+    )
+
     return {
         "predicted_class": predicted_class,
-        "predicted_label": CLASS_NAMES[predicted_class],
+        "predicted_label": predicted_name,
         "probabilities": {
             name: round(float(p), 4) for name, p in zip(CLASS_NAMES, probs)
         },
+        "top_features":  top_features,
+        "safety_flag":   safety_flag,
+        "safety_reason": safety_reason,
+        "lgbm_shap":     lgbm_shap,
     }
 
 
