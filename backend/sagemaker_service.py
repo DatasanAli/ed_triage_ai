@@ -109,13 +109,10 @@ def invoke_endpoint(payload: dict[str, Any]) -> dict[str, Any]:
     Call the SageMaker endpoint with a pre-built payload dict and return the
     raw response.
 
-    Accepts a plain dict — no FastAPI/Pydantic coupling — so LangGraph nodes
-    can import and call this directly.
-
-    NOTE: invoke_endpoint being called directly from run_triage_inference is
-    temporary scaffolding. The target state is for run_triage_inference to invoke
-    LangGraph orchestration, which will call invoke_endpoint internally from
-    within the predict node.
+    NOTE: This function is temporary scaffolding. The target state is for
+    invoke_endpoint to move into the orchestration/ service, which will own the
+    full inference pipeline (SageMaker + LangGraph + RAG). run_triage_inference
+    will then delegate to orchestration/ rather than calling this directly.
     """
     if settings.use_mock:
         logger.info("Using mock SageMaker response (TRIAGE_USE_MOCK=True)")
@@ -137,7 +134,7 @@ def run_triage_inference(request: TriageRequest) -> dict[str, Any]:
 
     Transforms the frontend request, calls the SageMaker endpoint, and returns
     a response dict ready for the frontend. Future: this will delegate to the
-    LangGraph orchestration graph instead of calling invoke_endpoint directly.
+    orchestration/ service instead of calling invoke_endpoint directly.
     """
     model_used = request.model or settings.default_model
     sm_payload = transform_request(request)
