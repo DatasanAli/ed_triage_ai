@@ -104,33 +104,46 @@ def transform_response(sagemaker_response: dict[str, Any], model_used: str) -> d
 # Endpoint invocation
 # ---------------------------------------------------------------------------
 
-def invoke_endpoint(request: TriageRequest) -> dict[str, Any]:
+def invoke_endpoint(payload: dict[str, Any]) -> dict[str, Any]:
     """
-    Call the SageMaker endpoint (or return mock data) and return a
-    transformed response dict ready for the frontend.
+    Call the SageMaker endpoint with a pre-built payload dict and return the
+    raw response.
+
+    Accepts a plain dict — no FastAPI/Pydantic coupling — so LangGraph nodes
+    can import and call this directly.
+
+    NOTE: invoke_endpoint being called directly from run_triage_inference is
+    temporary scaffolding. The target state is for run_triage_inference to invoke
+    LangGraph orchestration, which will call invoke_endpoint internally from
+    within the predict node.
+    """
+    if settings.use_mock:
+        logger.info("Using mock SageMaker response (TRIAGE_USE_MOCK=True)")
+        return copy.deepcopy(MOCK_SAGEMAKER_RESPONSE)
+
+    logger.info("Invoking SageMaker endpoint: %s", settings.sagemaker_endpoint_name)
+    runtime = boto3.client("sagemaker-runtime", region_name=settings.aws_region)
+    sm_result = runtime.invoke_endpoint(
+        EndpointName=settings.sagemaker_endpoint_name,
+        ContentType="application/json",
+        Body=json.dumps(payload),
+    )
+    return json.loads(sm_result["Body"].read().decode("utf-8"))
+
+
+def run_triage_inference(request: TriageRequest) -> dict[str, Any]:
+    """
+    Inference orchestration entry point for the /predict route.
+
+    Transforms the frontend request, calls the SageMaker endpoint, and returns
+    a response dict ready for the frontend. Future: this will delegate to the
+    LangGraph orchestration graph instead of calling invoke_endpoint directly.
     """
     model_used = request.model or settings.default_model
     sm_payload = transform_request(request)
 
     logger.info("Request payload (SageMaker format): %s", json.dumps(sm_payload, indent=2))
-
-    if settings.use_mock:
-        logger.info("Using mock SageMaker response (TRIAGE_USE_MOCK=True)")
-        raw_response = copy.deepcopy(MOCK_SAGEMAKER_RESPONSE)
-    else:
-        logger.info(
-            "Invoking SageMaker endpoint: %s", settings.sagemaker_endpoint_name
-        )
-        runtime = boto3.client(
-            "sagemaker-runtime", region_name=settings.aws_region
-        )
-        sm_result = runtime.invoke_endpoint(
-            EndpointName=settings.sagemaker_endpoint_name,
-            ContentType="application/json",
-            Body=json.dumps(sm_payload),
-        )
-        raw_response = json.loads(sm_result["Body"].read().decode("utf-8"))
-
+    raw_response = invoke_endpoint(sm_payload)
     result = transform_response(raw_response, model_used)
     logger.info("Response payload (frontend format): %s", json.dumps(result, indent=2))
     return result

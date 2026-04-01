@@ -14,7 +14,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
 from backend.schemas import TriageRequest, TriageResponse
-from backend.sagemaker_service import invoke_endpoint
+from backend.sagemaker_service import run_triage_inference
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -56,7 +56,7 @@ def predict(request: TriageRequest):
     inference, and return a structured prediction response.
     """
     try:
-        result = invoke_endpoint(request)
+        result = run_triage_inference(request)
         return TriageResponse(**result)
     except Exception as exc:
         logger.exception("Prediction failed")
