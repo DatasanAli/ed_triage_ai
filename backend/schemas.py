@@ -52,3 +52,14 @@ class TriageResponse(BaseModel):
         default=None, description="Human-readable explanation if flagged"
     )
     model_used: str = Field(description="Which model produced this result")
+
+    # Enriched fields from the agentic pipeline (LangGraph + RAG + LLM)
+    reconciled_label: Optional[str] = Field(default=None, description="More cautious of model vs LLM recommendation")
+    reconciled_class: Optional[int] = Field(default=None, description="0-based class index for reconciled_label")
+    llm_esi: Optional[int] = Field(default=None, description="LLM independent ESI recommendation (1/2/3)")
+    llm_agreement: Optional[bool] = Field(default=None, description="True if LLM agrees with model prediction")
+    clinical_rationale: Optional[str] = Field(default=None, description="LLM clinical reasoning narrative")
+    similar_cases: Optional[list] = Field(default=None, description="Top RAG-retrieved historical cases")
+    flags: Optional[list[str]] = Field(default=None, description="Escalation signals and uncertainty notes")
+    confidence_pct: Optional[int] = Field(default=None, description="Model confidence 0-100")
+    uncertainty_flag: Optional[bool] = Field(default=None, description="True if confidence is below threshold")

@@ -641,6 +641,76 @@ def inject_css():
         color: var(--on-surface); line-height: 1.4;
     }
 
+    /* Reconciled banner */
+    .reconciled-banner {
+        background: #fffbeb; border: 1px solid #f59e0b;
+        border-left: 6px solid #f59e0b;
+        border-radius: 8px; padding: 16px 20px;
+        margin-bottom: 20px;
+        display: flex; align-items: flex-start; gap: 12px;
+    }
+    .reconciled-icon { font-size: 20px; flex-shrink: 0; margin-top: 1px; }
+    .reconciled-title {
+        font-size: 13px; font-weight: 700; color: #92400e; margin-bottom: 4px;
+    }
+    .reconciled-body { font-size: 13px; color: #78350f; line-height: 1.5; }
+
+    /* Flags */
+    .flags-section {
+        margin-bottom: 20px;
+    }
+    .flag-item {
+        display: flex; align-items: flex-start; gap: 10px;
+        background: rgba(255,218,214,0.25);
+        border: 1px solid rgba(187,27,33,0.2);
+        border-radius: 8px; padding: 12px 16px;
+        margin-bottom: 8px; font-size: 13px;
+        color: var(--on-error-container); line-height: 1.5;
+    }
+    .flag-icon { flex-shrink: 0; font-size: 14px; margin-top: 1px; }
+
+    /* Clinical rationale */
+    .rationale-section {
+        background: var(--surface-container-lowest);
+        border-radius: 12px; padding: 24px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+        margin-bottom: 20px;
+    }
+    .rationale-text {
+        font-size: 14px; color: var(--on-surface);
+        line-height: 1.75; white-space: pre-wrap;
+    }
+
+    /* Similar cases table */
+    .cases-section {
+        background: var(--surface-container-lowest);
+        border-radius: 12px; padding: 24px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+        margin-bottom: 20px;
+    }
+    .cases-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    .cases-table th {
+        font-family: 'Public Sans', sans-serif;
+        font-size: 10px; font-weight: 700; text-transform: uppercase;
+        letter-spacing: 1px; color: var(--on-surface-variant);
+        padding: 8px 10px; border-bottom: 1px solid var(--outline-variant);
+        text-align: left;
+    }
+    .cases-table td {
+        padding: 10px 10px; color: var(--on-surface);
+        border-bottom: 1px solid var(--surface-container);
+        vertical-align: top;
+    }
+    .cases-table tr:last-child td { border-bottom: none; }
+    .esi-badge {
+        display: inline-block; font-weight: 700; font-size: 11px;
+        padding: 2px 8px; border-radius: 4px;
+    }
+    .esi-1 { background: var(--tertiary-fixed); color: var(--tertiary); }
+    .esi-2 { background: var(--primary-fixed); color: var(--primary); }
+    .esi-3 { background: var(--surface-container-highest); color: var(--secondary); }
+    .sim-score { font-weight: 600; color: var(--primary); }
+
     /* Footer status bar */
     .footer-bar {
         display: flex; justify-content: space-between;
@@ -1041,6 +1111,14 @@ def render_results_page():
     safety_reason = triage_result.get("safety_reason", None)
     top_features = triage_result.get("top_features", [])
 
+    # Agentic pipeline enriched fields
+    reconciled_label = triage_result.get("reconciled_label")
+    llm_agreement = triage_result.get("llm_agreement")
+    llm_esi = triage_result.get("llm_esi")
+    clinical_rationale = triage_result.get("clinical_rationale")
+    similar_cases = triage_result.get("similar_cases") or []
+    flags = triage_result.get("flags") or []
+
     # Derive UI data from real backend response
     drivers = shap_features_to_drivers(top_features)
     recommendations = label_to_recommendations(predicted_label)
@@ -1086,6 +1164,31 @@ def render_results_page():
     # Safety flag banner
     if safety_flag and safety_reason:
         st.warning(f"\u26a0\ufe0f **Safety Alert:** {safety_reason}")
+
+    # Reconciled label banner — shown when LLM disagrees with model
+    if llm_agreement is False and reconciled_label and reconciled_label != predicted_label:
+        esi_num = llm_esi or "?"
+        st.markdown(f"""
+        <div class="reconciled-banner">
+            <div class="reconciled-icon">&#9888;</div>
+            <div>
+                <div class="reconciled-title">LLM CLINICAL OVERRIDE — Effective Recommendation: {reconciled_label}</div>
+                <div class="reconciled-body">
+                    The model predicted <strong>{predicted_label}</strong>, but independent LLM reasoning
+                    recommended ESI {esi_num} (<strong>{reconciled_label}</strong>).
+                    The more cautious level (<strong>{reconciled_label}</strong>) is used for protocol selection.
+                </div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    # Escalation flags
+    if flags:
+        flag_items = "".join(
+            f'<div class="flag-item"><span class="flag-icon">&#9873;</span>{f}</div>'
+            for f in flags
+        )
+        st.markdown(f'<div class="flags-section">{flag_items}</div>', unsafe_allow_html=True)
 
     left_col, right_col = st.columns([7, 5], gap="large")
 
@@ -1242,6 +1345,57 @@ def render_results_page():
                     del st.session_state[key]
             st.session_state.page = "intake"
             st.rerun()
+
+    # Clinical Rationale
+    if clinical_rationale:
+        st.markdown("""
+        <div class="rationale-section">
+            <div class="confidence-title">Clinical Rationale (LLM Analysis)</div>
+        """, unsafe_allow_html=True)
+        st.markdown(f'<div class="rationale-text">{clinical_rationale}</div>', unsafe_allow_html=True)
+        st.markdown("</div>", unsafe_allow_html=True)
+
+    # Similar Historical Cases
+    if similar_cases:
+        rows = ""
+        for c in similar_cases:
+            esi = c.get("triage_level", "?")
+            esi_cls = f"esi-{esi}" if esi in (1, 2, 3) else "esi-3"
+            hr = f"{c['heart_rate']:.0f}" if c.get("heart_rate") else "—"
+            sbp = c.get("sbp"); dbp = c.get("dbp")
+            bp = f"{sbp:.0f}/{dbp:.0f}" if sbp and dbp else "—"
+            spo2 = f"{c['spo2']:.0f}%" if c.get("spo2") else "—"
+            rows += f"""
+            <tr>
+                <td><span class="sim-score">{c.get('similarity', 0):.2f}</span></td>
+                <td><span class="esi-badge {esi_cls}">ESI {esi}</span></td>
+                <td>{c.get('chief_complaint') or '—'}</td>
+                <td>{hr}</td>
+                <td>{bp}</td>
+                <td>{spo2}</td>
+                <td>{c.get('diagnosis') or '—'}</td>
+                <td>{c.get('outcome') or '—'}</td>
+            </tr>"""
+        st.markdown(f"""
+        <div class="cases-section">
+            <div class="confidence-title">Similar Historical Cases (RAG)</div>
+            <table class="cases-table">
+                <thead>
+                    <tr>
+                        <th>Similarity</th>
+                        <th>ESI</th>
+                        <th>Chief Complaint</th>
+                        <th>HR</th>
+                        <th>BP</th>
+                        <th>SpO2</th>
+                        <th>Diagnosis</th>
+                        <th>Outcome</th>
+                    </tr>
+                </thead>
+                <tbody>{rows}</tbody>
+            </table>
+        </div>
+        """, unsafe_allow_html=True)
 
     # Footer — show actual model_used from backend response
     now_utc = datetime.now(timezone.utc).strftime("%H:%M:%S UTC")
