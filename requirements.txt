@@ -1,3 +1,6 @@
+boto3==1.34.0
+numpy==1.24.0
+streamlit>=1.30.0
 # ------------------------------------------------------------
 # Root requirements — installed in SageMaker Studio JupyterLab
 # Packages already in the conda base env are NOT listed here
@@ -19,3 +22,8 @@ pinecone>=3.0.0
 # Configuration & utilities
 python-dotenv>=1.0.0
 pandas>=2.2.0
+
+# Backend (FastAPI)
+fastapi>=0.115.0
+uvicorn[standard]>=0.34.0
+pydantic-settings>=2.0.0
