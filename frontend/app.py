@@ -1097,249 +1097,200 @@ def render_results_page():
             st.rerun()
         return
 
-    prob = triage_result.get("probabilities", {
-        "L1-Critical": 0.0, "L2-Emergent": 0.0, "L3-Urgent/LessUrgent": 0.0
-    })
     predicted_label = triage_result.get("predicted_label", "Unknown")
-    model_used = triage_result.get("model_used", "arch4")
-    safety_flag = triage_result.get("safety_flag", False)
-    safety_reason = triage_result.get("safety_reason", None)
-    top_features = triage_result.get("top_features", [])
+    model_used      = triage_result.get("model_used", "arch4")
+    safety_flag     = triage_result.get("safety_flag", False)
+    safety_reason   = triage_result.get("safety_reason", None)
+    top_features    = triage_result.get("top_features", [])
 
-    # Agentic pipeline enriched fields
-    reconciled_label = triage_result.get("reconciled_label")
-    llm_agreement = triage_result.get("llm_agreement")
-    llm_esi = triage_result.get("llm_esi")
+    reconciled_label   = triage_result.get("reconciled_label") or predicted_label
+    llm_agreement      = triage_result.get("llm_agreement")
     clinical_rationale = triage_result.get("clinical_rationale")
-    similar_cases = triage_result.get("similar_cases") or []
-    flags = triage_result.get("flags") or []
+    similar_cases      = triage_result.get("similar_cases") or []
+    was_upgraded       = llm_agreement is False and reconciled_label != predicted_label
 
-    # Derive UI data from real backend response
-    drivers = shap_features_to_drivers(top_features)
+    # Nurse-friendly label/colour mapping
+    LEVEL_META = {
+        "L1-Critical": {
+            "color": "#b91c1c", "bg": "#fef2f2", "border": "#fca5a5",
+            "badge_bg": "#fee2e2", "badge_color": "#991b1b",
+            "title": "ESI 1 — Immediate / Critical",
+            "action": "Bring to resuscitation bay immediately. Do not leave unattended.",
+            "icon": "🚨",
+        },
+        "L2-Emergent": {
+            "color": "#c2410c", "bg": "#fff7ed", "border": "#fdba74",
+            "badge_bg": "#ffedd5", "badge_color": "#9a3412",
+            "title": "ESI 2 — Emergent",
+            "action": "Assign to monitored bed within 15 minutes. Notify attending.",
+            "icon": "⚠️",
+        },
+        "L3-Urgent": {
+            "color": "#a16207", "bg": "#fefce8", "border": "#fde047",
+            "badge_bg": "#fef9c3", "badge_color": "#854d0e",
+            "title": "ESI 3 — Urgent / Less Urgent",
+            "action": "Place in waiting area. Reassess vitals every 30 minutes.",
+            "icon": "🔔",
+        },
+    }
+    # Normalise key
+    rec_key = reconciled_label.replace("/LessUrgent", "").replace("LessUrgent", "").strip()
+    meta = LEVEL_META.get(rec_key, LEVEL_META["L3-Urgent"])
 
-    # Parse label
-    label_parts = predicted_label.split("-", 1)
-    level_code = label_parts[0] if label_parts else predicted_label
-    level_desc = label_parts[1].upper() if len(label_parts) > 1 else ""
-
-    # ── Collapsed patient header ──────────────────────────────────
-    first_name = form_data.get("first_name", "").strip()
-    last_name  = form_data.get("last_name", "").strip()
+    # ── Patient header + new patient button ──────────────────────
+    first_name   = form_data.get("first_name", "").strip()
+    last_name    = form_data.get("last_name", "").strip()
     patient_name = f"{first_name} {last_name}".strip() or "Patient"
-    age_val = form_data.get("age")
+    age_val      = form_data.get("age")
     notes_preview = form_data.get("triage_notes", "")[:120]
-    age_str = f", {age_val}y" if age_val else ""
-    st.markdown(f"""
-    <div style="background:#f8fafc;border:1px solid #dde3ed;border-radius:12px;
-                padding:16px 20px;margin-bottom:20px;
-                display:flex;align-items:center;gap:16px;">
-        <div style="font-size:28px;">&#128100;</div>
-        <div style="flex:1;">
-            <div style="font-size:14px;font-weight:700;color:#0f172a;">{patient_name}{age_str}</div>
-            <div style="font-size:12px;color:#64748b;margin-top:2px;">{notes_preview}{"..." if len(form_data.get("triage_notes","")) > 120 else ""}</div>
+    age_str      = f", {age_val}y" if age_val else ""
+
+    hdr_col, btn_col = st.columns([10, 2])
+    with hdr_col:
+        st.markdown(f"""
+        <div style="background:#f8fafc;border:1px solid #dde3ed;border-radius:12px;
+                    padding:14px 20px;display:flex;align-items:center;gap:16px;">
+            <div style="font-size:26px;">&#128100;</div>
+            <div style="flex:1;">
+                <div style="font-size:14px;font-weight:700;color:#0f172a;">{patient_name}{age_str}</div>
+                <div style="font-size:12px;color:#64748b;margin-top:2px;">{notes_preview}{"..." if len(form_data.get("triage_notes","")) > 120 else ""}</div>
+            </div>
+            <div style="font-size:11px;color:#94a3b8;">{datetime.now(timezone.utc).strftime("%H:%M UTC")}</div>
         </div>
-        <div style="font-size:11px;color:#94a3b8;">{datetime.now(timezone.utc).strftime("%H:%M UTC")}</div>
+        """, unsafe_allow_html=True)
+    with btn_col:
+        if st.button("Triage Next Patient", type="primary", use_container_width=True, key="new_patient_btn"):
+            for key in ["triage_notes", "age", "heart_rate", "resp_rate",
+                        "sbp", "dbp", "spo2", "temp_f", "pain",
+                        "arrival_transport", "form_data", "triage_result", "is_loading"]:
+                if key in st.session_state:
+                    del st.session_state[key]
+            st.session_state.page = "intake"
+            st.rerun()
+
+    # ── Triage decision card ──────────────────────────────────────
+    st.markdown(f"""
+    <div style="background:{meta['bg']};border:1px solid {meta['border']};
+                border-left:6px solid {meta['color']};border-radius:12px;
+                padding:24px 28px;margin:16px 0;">
+        <div style="display:flex;align-items:flex-start;gap:16px;">
+            <div style="font-size:36px;line-height:1;">{meta['icon']}</div>
+            <div style="flex:1;">
+                <div style="font-size:11px;font-weight:700;text-transform:uppercase;
+                            letter-spacing:1.5px;color:{meta['color']};margin-bottom:4px;">
+                    Triage Priority
+                </div>
+                <div style="font-size:28px;font-weight:900;color:{meta['color']};
+                            letter-spacing:-0.5px;line-height:1.1;margin-bottom:8px;">
+                    {meta['title']}
+                </div>
+                <div style="font-size:14px;font-weight:600;color:{meta['color']};">
+                    {meta['action']}
+                </div>
+            </div>
+        </div>
     </div>
     """, unsafe_allow_html=True)
 
-    # Safety flag banner
+    if was_upgraded:
+        st.markdown(f"""
+        <div style="margin-bottom:12px;font-size:13px;color:{meta['color']};
+                    background:{meta['badge_bg']};border-radius:8px;padding:10px 14px;">
+            ↑ <strong>Upgraded from initial assessment</strong> — clinical review flagged higher urgency
+        </div>
+        """, unsafe_allow_html=True)
+
     if safety_flag and safety_reason:
-        st.warning(f"\u26a0\ufe0f **Safety Alert:** {safety_reason}")
-
-    # Reconciled label banner
-    if llm_agreement is False and reconciled_label and reconciled_label != predicted_label:
-        esi_num = llm_esi or "?"
         st.markdown(f"""
-        <div class="reconciled-banner">
-            <div class="reconciled-icon">&#9888;</div>
-            <div>
-                <div class="reconciled-title">LLM CLINICAL OVERRIDE — Effective Recommendation: {reconciled_label}</div>
-                <div class="reconciled-body">
-                    The model predicted <strong>{predicted_label}</strong>, but independent LLM reasoning
-                    recommended ESI {esi_num} (<strong>{reconciled_label}</strong>).
-                    The more cautious level is used for protocol selection.
-                </div>
-            </div>
+        <div style="margin-bottom:12px;font-size:13px;color:#7c2d12;
+                    background:#fff7ed;border:1px solid #fdba74;border-radius:8px;padding:10px 14px;">
+            ⚠️ <strong>Safety Alert:</strong> {safety_reason}
         </div>
         """, unsafe_allow_html=True)
 
-    # Escalation flags
-    if flags:
-        flag_items = "".join(
-            f'<div class="flag-item"><span class="flag-icon">&#9873;</span>{f}</div>'
-            for f in flags
-        )
-        st.markdown(f'<div class="flags-section">{flag_items}</div>', unsafe_allow_html=True)
-
-    # ── Priority card (smaller, full width) ───────────────────────
-    st.markdown(f"""
-    <div style="background:#fff;border-radius:12px;border-left:5px solid var(--tertiary);
-                box-shadow:0 1px 3px rgba(0,0,0,0.06);
-                display:flex;align-items:center;gap:0;margin-bottom:20px;overflow:hidden;">
-        <div style="padding:20px 28px;flex:1;">
-            <div style="font-family:'Public Sans',sans-serif;font-size:10px;font-weight:700;
-                        color:var(--tertiary);background:var(--tertiary-fixed);
-                        padding:3px 8px;border-radius:4px;display:inline-block;margin-bottom:10px;">
-                PREDICTED PRIORITY
-            </div>
-            <div style="font-size:36px;font-weight:900;color:var(--tertiary);
-                        letter-spacing:-1px;line-height:1;margin-bottom:6px;">
-                {level_code} — {level_desc}
-            </div>
-            <div style="font-size:13px;color:var(--on-surface-variant);">
-                Model: <strong>{model_used}</strong> &nbsp;·&nbsp; Classified as <strong>{predicted_label}</strong>
-            </div>
-        </div>
-        <div style="background:var(--tertiary-container);color:#ffceca;
-                    padding:20px 32px;text-align:center;min-width:160px;align-self:stretch;
-                    display:flex;flex-direction:column;justify-content:center;">
-            <div style="font-size:32px;margin-bottom:4px;">&#9888;</div>
-            <div style="font-family:'Public Sans',sans-serif;font-size:9px;font-weight:700;
-                        text-transform:uppercase;letter-spacing:2px;opacity:0.8;margin-bottom:2px;">
-                Predicted Class
-            </div>
-            <div style="font-size:16px;font-weight:700;">{predicted_label}</div>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
-
-    # ── Confidence + Drivers ──────────────────────────────────────
-    c_left, c_right = st.columns(2)
-
-    with c_left:
-        l1_pct = prob.get("L1-Critical", 0.0) * 100
-        l2_pct = prob.get("L2-Emergent", 0.0) * 100
-        l3_pct = prob.get("L3-Urgent/LessUrgent", 0.0) * 100
-        st.markdown(f"""
-        <div class="confidence-section">
-            <div class="confidence-title">Confidence Breakdown</div>
-            <div class="conf-row">
-                <div class="conf-labels">
-                    <span class="conf-name critical">Level 1 (Critical)</span>
-                    <span class="conf-pct">{l1_pct:.1f}%</span>
-                </div>
-                <div class="conf-track lg">
-                    <div class="conf-fill critical" style="width:{l1_pct}%"></div>
-                </div>
-            </div>
-            <div class="conf-row">
-                <div class="conf-labels">
-                    <span class="conf-name muted">Level 2 (Emergent)</span>
-                    <span class="conf-pct muted">{l2_pct:.1f}%</span>
-                </div>
-                <div class="conf-track sm">
-                    <div class="conf-fill muted" style="width:{l2_pct}%"></div>
-                </div>
-            </div>
-            <div class="conf-row">
-                <div class="conf-labels">
-                    <span class="conf-name muted">Level 3 (Urgent)</span>
-                    <span class="conf-pct muted">{l3_pct:.1f}%</span>
-                </div>
-                <div class="conf-track sm">
-                    <div class="conf-fill faint" style="width:max(1%,{l3_pct}%)"></div>
-                </div>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
-
-    with c_right:
-        drivers_items = []
-        for d in drivers:
-            bg_cls = "critical-bg" if d["critical"] else "normal-bg"
-            icon_cls = "critical" if d["critical"] else "primary"
-            title_cls = "critical" if d["critical"] else "normal"
-            drivers_items.append(
-                f'<div class="driver-item {bg_cls}">'
-                f'<span class="driver-icon {icon_cls}">{d["icon"]}</span>'
-                f'<div>'
-                f'<div class="driver-title {title_cls}">{d["title"]}</div>'
-                f'<div class="driver-detail">{d["detail"]}</div>'
-                f'</div></div>'
-            )
-        drivers_html = "".join(drivers_items) if drivers_items else (
-            "<p style='color:var(--on-surface-variant);font-size:13px;'>No SHAP feature data available.</p>"
-        )
-        st.markdown(
-            f'<div class="drivers-section">'
-            f'<div class="confidence-title">Clinical Drivers</div>'
-            f'{drivers_html}'
-            f'</div>',
-            unsafe_allow_html=True,
-        )
-
-    # ── Action button ─────────────────────────────────────────────
-    if st.button("Triage Another Patient", use_container_width=True, key="restart_btn"):
-        for key in ["triage_notes", "age", "heart_rate", "resp_rate",
-                    "sbp", "dbp", "spo2", "temp_f", "pain",
-                    "arrival_transport", "form_data", "triage_result", "is_loading"]:
-            if key in st.session_state:
-                del st.session_state[key]
-        st.session_state.page = "intake"
-        st.rerun()
-
-    # Clinical Rationale
+    # ── Clinical reasoning ────────────────────────────────────────
     if clinical_rationale:
-        st.markdown("""
+        st.markdown(f"""
         <div class="rationale-section">
-            <div class="confidence-title">Clinical Rationale (LLM Analysis)</div>
+            <div class="confidence-title">Clinical Reasoning</div>
+            <div class="rationale-text">{clinical_rationale}</div>
+        </div>
         """, unsafe_allow_html=True)
-        st.markdown(f'<div class="rationale-text">{clinical_rationale}</div>', unsafe_allow_html=True)
-        st.markdown("</div>", unsafe_allow_html=True)
 
-    # Similar Historical Cases
+    # ── Key vitals that drove the decision (from SHAP, plain English) ──
+    if top_features:
+        vital_rows = ""
+        for f in top_features:
+            name = FEATURE_DISPLAY_NAMES.get(f.get("feature", ""), f.get("feature", "").replace("_", " ").title())
+            direction = f.get("direction", "")
+            shap = f.get("shap", 0)
+            is_against = "away" in direction
+            tag_color  = "#b91c1c" if is_against else "#15803d"
+            tag_bg     = "#fee2e2" if is_against else "#dcfce7"
+            tag_text   = "Working against this level" if is_against else "Supporting this level"
+            vital_rows += f"""
+            <tr>
+                <td style="font-weight:600;color:#0f172a;">{name}</td>
+                <td><span style="background:{tag_bg};color:{tag_color};font-size:11px;
+                                 font-weight:600;padding:2px 8px;border-radius:4px;">
+                    {tag_text}
+                </span></td>
+            </tr>"""
+        st.markdown(f"""
+        <div class="rationale-section" style="margin-top:16px;">
+            <div class="confidence-title">Key Factors</div>
+            <table style="width:100%;border-collapse:collapse;font-size:13px;">
+                <tbody>{vital_rows}</tbody>
+            </table>
+        </div>
+        """, unsafe_allow_html=True)
+
+    # ── Similar past cases ────────────────────────────────────────
     if similar_cases:
+        URGENCY_LABEL = {1: "Critical", 2: "Emergent", 3: "Urgent"}
+        URGENCY_COLOR = {1: "#b91c1c", 2: "#c2410c", 3: "#a16207"}
+        URGENCY_BG    = {1: "#fee2e2", 2: "#ffedd5", 3: "#fef9c3"}
         rows = ""
         for c in similar_cases:
-            esi = c.get("triage_level", "?")
-            esi_cls = f"esi-{esi}" if esi in (1, 2, 3) else "esi-3"
-            hr = f"{c['heart_rate']:.0f}" if c.get("heart_rate") else "—"
-            sbp = c.get("sbp"); dbp = c.get("dbp")
-            bp = f"{sbp:.0f}/{dbp:.0f}" if sbp and dbp else "—"
-            spo2 = f"{c['spo2']:.0f}%" if c.get("spo2") else "—"
+            esi = c.get("triage_level")
+            urgency_label = URGENCY_LABEL.get(esi, "Unknown")
+            urg_color = URGENCY_COLOR.get(esi, "#64748b")
+            urg_bg    = URGENCY_BG.get(esi, "#f1f5f9")
+            outcome   = (c.get("outcome") or "—").title()
+            complaint = (c.get("chief_complaint") or "—").title()
+            diagnosis = (c.get("diagnosis") or "—").title()
             rows += f"""
-            <tr>
-                <td><span class="sim-score">{c.get('similarity', 0):.2f}</span></td>
-                <td><span class="esi-badge {esi_cls}">ESI {esi}</span></td>
-                <td>{c.get('chief_complaint') or '—'}</td>
-                <td>{hr}</td>
-                <td>{bp}</td>
-                <td>{spo2}</td>
-                <td>{c.get('diagnosis') or '—'}</td>
-                <td>{c.get('outcome') or '—'}</td>
+            <tr style="border-bottom:1px solid #f1f5f9;">
+                <td style="padding:10px;font-weight:600;color:#0f172a;">{complaint}</td>
+                <td style="padding:10px;color:#475569;">{diagnosis}</td>
+                <td style="padding:10px;">
+                    <span style="background:{urg_bg};color:{urg_color};font-size:11px;
+                                 font-weight:700;padding:2px 8px;border-radius:4px;">
+                        ESI {esi} — {urgency_label}
+                    </span>
+                </td>
+                <td style="padding:10px;color:#475569;">{outcome}</td>
             </tr>"""
         st.markdown(f"""
         <div class="cases-section">
-            <div class="confidence-title">Similar Historical Cases (RAG)</div>
-            <table class="cases-table">
+            <div class="confidence-title">Similar Past Cases</div>
+            <table style="width:100%;border-collapse:collapse;font-size:13px;">
                 <thead>
-                    <tr>
-                        <th>Similarity</th>
-                        <th>ESI</th>
-                        <th>Chief Complaint</th>
-                        <th>HR</th>
-                        <th>BP</th>
-                        <th>SpO2</th>
-                        <th>Diagnosis</th>
-                        <th>Outcome</th>
+                    <tr style="border-bottom:2px solid #e2e8f0;">
+                        <th style="text-align:left;padding:8px 10px;font-size:10px;font-weight:700;
+                                   text-transform:uppercase;letter-spacing:1px;color:#64748b;">Chief Complaint</th>
+                        <th style="text-align:left;padding:8px 10px;font-size:10px;font-weight:700;
+                                   text-transform:uppercase;letter-spacing:1px;color:#64748b;">Diagnosis</th>
+                        <th style="text-align:left;padding:8px 10px;font-size:10px;font-weight:700;
+                                   text-transform:uppercase;letter-spacing:1px;color:#64748b;">ESI Level</th>
+                        <th style="text-align:left;padding:8px 10px;font-size:10px;font-weight:700;
+                                   text-transform:uppercase;letter-spacing:1px;color:#64748b;">Outcome</th>
                     </tr>
                 </thead>
                 <tbody>{rows}</tbody>
             </table>
         </div>
         """, unsafe_allow_html=True)
-
-    # Footer — show actual model_used from backend response
-    now_utc = datetime.now(timezone.utc).strftime("%H:%M:%S UTC")
-    st.markdown(f"""
-    <div class="footer-bar">
-        <div class="footer-left">
-            <span><span class="status-dot"></span> AI Engine Online</span>
-            <span>Model: {model_used}</span>
-        </div>
-        <span>Last Sync: {now_utc}</span>
-    </div>
-    """, unsafe_allow_html=True)
 
 
 # ── Main ──────────────────────────────────────────────────────────────────────
