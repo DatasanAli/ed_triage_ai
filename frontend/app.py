@@ -112,6 +112,19 @@ def inject_css():
     .stApp, [data-testid="stAppViewContainer"] {
         background-color: var(--surface) !important;
         font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif !important;
+        color: #171c22 !important;
+    }
+
+    /* Ensure all native Streamlit text elements are dark */
+    .stApp p:not(button p):not([data-testid="stButton"] p),
+    .stApp h1, .stApp h2, .stApp h3, .stApp label {
+        color: #171c22;
+    }
+
+    /* Restore white text on primary buttons */
+    [data-testid="stButton"] > button[kind="primary"] p,
+    [data-testid="stButton"] > button[kind="primary"] span {
+        color: white !important;
     }
 
     [data-testid="stHeader"] { background: transparent !important; }
@@ -815,6 +828,54 @@ def inject_css():
         border-right-color: #1d4ed8 !important;
         font-weight: 600 !important;
     }
+
+    /* ── Loading overlay ───────────────────────────────────────── */
+    .triage-overlay {
+        position: fixed;
+        inset: 0;
+        background: rgba(15, 23, 42, 0.55);
+        backdrop-filter: blur(3px);
+        z-index: 9999;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    .triage-overlay-card {
+        background: #ffffff;
+        border-radius: 16px;
+        padding: 40px 48px;
+        width: 420px;
+        box-shadow: 0 20px 60px rgba(0,0,0,0.25);
+        text-align: center;
+    }
+    .overlay-title {
+        font-size: 17px;
+        font-weight: 700;
+        color: #0f172a;
+        margin-bottom: 6px;
+    }
+    .overlay-subtitle {
+        font-size: 13px;
+        color: #64748b;
+        margin-bottom: 28px;
+    }
+    .overlay-step {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 10px 0;
+        border-bottom: 1px solid #f1f5f9;
+        text-align: left;
+    }
+    .overlay-step:last-child { border-bottom: none; }
+    .overlay-step-icon { font-size: 18px; width: 28px; text-align: center; }
+    .overlay-step-text { font-size: 13px; flex: 1; }
+    .step-done   { color: #94a3b8; }
+    .step-done .overlay-step-text { text-decoration: line-through; }
+    .step-active { color: #1d4ed8; font-weight: 600; }
+    .step-pending { color: #cbd5e1; }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+    .step-active .overlay-step-icon { animation: pulse 1.2s ease-in-out infinite; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -900,21 +961,29 @@ def render_intake_page():
         age   = fd.get("age")
         notes = fd.get("triage_notes", "")[:120]
         age_str = f", {age}y" if age else ""
-        st.markdown(f"""
-        <div style="background:#f8fafc;border:1px solid #dde3ed;border-radius:12px;
-                    padding:16px 20px;margin-bottom:16px;
-                    display:flex;align-items:center;gap:16px;">
-            <div style="font-size:28px;">&#128100;</div>
-            <div>
-                <div style="font-size:14px;font-weight:700;color:#0f172a;">{name}{age_str}</div>
-                <div style="font-size:12px;color:#64748b;margin-top:2px;">{notes}{"..." if len(fd.get("triage_notes","")) > 120 else ""}</div>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
+        st.markdown(f"👤 **{name}{age_str}**")
+        st.caption(notes + ("..." if len(fd.get("triage_notes", "")) > 120 else ""))
     else:
+        # ── Dev shortcut ─────────────────────────────────────────
+        if st.button("🧪 Fill Test Patient (Dorothy)", key="fill_test"):
+            st.session_state.first_name = "Dorothy"
+            st.session_state.last_name = "Williams"
+            st.session_state.age = 68
+            st.session_state.sex = "Female"
+            st.session_state.triage_notes = "Fever, confusion, and low blood pressure for the past 6 hours"
+            st.session_state.heart_rate = 118
+            st.session_state.resp_rate = 24
+            st.session_state.sbp = 88
+            st.session_state.dbp = 52
+            st.session_state.spo2 = 93
+            st.session_state.temp_f = 101.8
+            st.session_state.pain = 6
+            st.session_state.arrival_transport = "Ambulance"
+            st.rerun()
+
         # ── Patient Info ─────────────────────────────────────────
         st.markdown('<div class="intake-section-title">Patient Information</div>', unsafe_allow_html=True)
-        c1, c2, c3 = st.columns([2, 2, 1])
+        c1, c2, c3, c4 = st.columns([2, 2, 1, 1])
         with c1:
             st.markdown('<div class="field-label">First Name</div>', unsafe_allow_html=True)
             st.text_input("First Name", key="first_name", placeholder="Jane", label_visibility="collapsed")
@@ -925,6 +994,9 @@ def render_intake_page():
             st.markdown('<div class="field-label">Age</div>', unsafe_allow_html=True)
             st.number_input("Age", min_value=0, max_value=120, value=None, key="age",
                             placeholder="—", label_visibility="collapsed")
+        with c4:
+            st.markdown('<div class="field-label">Sex</div>', unsafe_allow_html=True)
+            st.selectbox("Sex", ["—", "Female", "Male", "Other"], key="sex", label_visibility="collapsed")
 
         # ── Triage Notes ─────────────────────────────────────────
         st.markdown('<div class="intake-section-title">Triage Notes</div>', unsafe_allow_html=True)
@@ -964,42 +1036,45 @@ def render_intake_page():
 
         # ── Pain + Transport ─────────────────────────────────────
         st.markdown('<div class="intake-section-title">Assessment</div>', unsafe_allow_html=True)
-        p_col, t_col = st.columns([3, 1])
+        p_col, t_col = st.columns([1, 3])
         with p_col:
-            pain_val = st.session_state.get("pain", 4)
-            st.markdown(f'<div class="field-label">Pain Level &nbsp;<span style="color:var(--primary);font-weight:700;">{pain_val} / 10</span></div>', unsafe_allow_html=True)
-            st.slider("Pain", min_value=0, max_value=10, value=4, key="pain", label_visibility="collapsed")
+            st.markdown('<div class="field-label">Pain (0–10)</div>', unsafe_allow_html=True)
+            st.number_input("Pain", min_value=0, max_value=10, value=None, key="pain",
+                            placeholder="0–10", label_visibility="collapsed")
         with t_col:
             st.markdown('<div class="field-label">Arrival Transport</div>', unsafe_allow_html=True)
             st.selectbox("Transport", TRANSPORT_OPTIONS, key="arrival_transport", label_visibility="collapsed")
 
-    # ── Submit button (disabled while loading) ───────────────────
-    _l, center, _r = st.columns([2, 3, 2])
-    with center:
-        clicked = st.button(
-            "Analyzing..." if is_loading else "Run Triage Assessment",
-            type="primary",
-            use_container_width=True,
-            key="submit_btn",
-            disabled=is_loading,
-        )
+    # ── Submit button (hidden while loading via CSS overlay) ─────
+    if not is_loading:
+        _l, center, _r = st.columns([2, 3, 2])
+        with center:
+            clicked = st.button(
+                "Run Triage Assessment",
+                type="primary",
+                use_container_width=True,
+                key="submit_btn",
+            )
+    else:
+        clicked = False
 
-        # Status steps shown directly below the button
-        status_box = st.empty()
+    overlay_slot = st.empty()
 
     if clicked and not is_loading:
+        _sex_raw = st.session_state.get("sex", "—")
         form_data = {
             "first_name": st.session_state.get("first_name", ""),
             "last_name": st.session_state.get("last_name", ""),
-            "triage_notes": st.session_state.get("triage_notes", ""),
             "age": st.session_state.get("age"),
+            "sex": _sex_raw if _sex_raw != "—" else None,
+            "triage_notes": st.session_state.get("triage_notes", ""),
             "heart_rate": st.session_state.get("heart_rate"),
             "resp_rate": st.session_state.get("resp_rate"),
             "sbp": st.session_state.get("sbp"),
             "dbp": st.session_state.get("dbp"),
             "spo2": st.session_state.get("spo2"),
             "temp_f": st.session_state.get("temp_f"),
-            "pain": st.session_state.get("pain", 4),
+            "pain": st.session_state.get("pain"),
             "arrival_transport": st.session_state.get("arrival_transport", "Walk In"),
         }
         st.session_state.form_data = form_data
@@ -1007,7 +1082,7 @@ def render_intake_page():
         st.rerun()
 
     if is_loading:
-        _backend_keys = {"triage_notes", "age", "heart_rate", "resp_rate",
+        _backend_keys = {"triage_notes", "age", "sex", "heart_rate", "resp_rate",
                          "sbp", "dbp", "spo2", "temp_f", "pain", "arrival_transport"}
         form_data = st.session_state.get("form_data", {})
         payload = {k: v for k, v in form_data.items()
@@ -1027,32 +1102,39 @@ def render_intake_page():
         thread.start()
 
         steps = [
-            ("🔬", "Running ML model inference..."),
-            ("🔍", "Retrieving similar historical cases..."),
-            ("🧠", "LLM clinical analysis in progress..."),
-            ("📋", "Synthesizing triage recommendation..."),
+            ("🔬", "Running ML model inference"),
+            ("🔍", "Retrieving similar historical cases"),
+            ("🧠", "LLM clinical analysis"),
+            ("📋", "Synthesizing triage recommendation"),
         ]
-        step_idx = 0
-        while thread.is_alive():
-            icon, msg = steps[min(step_idx, len(steps) - 1)]
-            status_box.markdown(f"""
-            <div style="display:flex;align-items:center;gap:14px;padding:16px 20px;
-                        background:#f0f6ff;border-radius:10px;border:1px solid #c7d9f5;
-                        margin-top:12px;">
-                <div style="font-size:22px">{icon}</div>
-                <div>
-                    <div style="font-size:13px;font-weight:600;color:#1d4ed8;">{msg}</div>
-                    <div style="font-size:11px;color:#64748b;margin-top:2px;">
-                        Step {min(step_idx+1, len(steps))} of {len(steps)}
-                    </div>
+
+        def _render_overlay(current_idx):
+            rows = ""
+            for i, (icon, msg) in enumerate(steps):
+                if i < current_idx:
+                    rows += f'<div class="overlay-step step-done"><span class="overlay-step-icon">✓</span><span class="overlay-step-text">{msg}</span></div>'
+                elif i == current_idx:
+                    rows += f'<div class="overlay-step step-active"><span class="overlay-step-icon">{icon}</span><span class="overlay-step-text">{msg}…</span></div>'
+                else:
+                    rows += f'<div class="overlay-step step-pending"><span class="overlay-step-icon">{icon}</span><span class="overlay-step-text">{msg}</span></div>'
+            overlay_slot.markdown(f"""
+            <div class="triage-overlay">
+                <div class="triage-overlay-card">
+                    <div class="overlay-title">Analyzing Patient</div>
+                    <div class="overlay-subtitle">Running triage assessment pipeline…</div>
+                    {rows}
                 </div>
             </div>
             """, unsafe_allow_html=True)
+
+        step_idx = 0
+        while thread.is_alive():
+            _render_overlay(min(step_idx, len(steps) - 1))
             _time.sleep(4)
             step_idx += 1
 
         thread.join()
-        status_box.empty()
+        overlay_slot.empty()
         st.session_state.is_loading = False
 
         if "error" in result_holder:
@@ -1086,6 +1168,21 @@ def render_intake_page():
 # ── Page 2: Results ──────────────────────────────────────────────────────────
 
 def render_results_page():
+    st.markdown("""
+    <div class="top-header">
+        <div class="top-header-left">
+            <span class="brand-name">TriagePulse</span>
+            <div class="header-divider"></div>
+            <span class="page-title">Triage Assessment</span>
+        </div>
+        <div class="top-header-right">
+            <span class="header-icon">&#128276;</span>
+            <span class="header-icon">&#9881;</span>
+            <div class="avatar">&#128100;</div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
     # Pull real data from session state — no mocks
     triage_result = st.session_state.get("triage_result", {})
     form_data = st.session_state.get("form_data", {})
@@ -1147,17 +1244,8 @@ def render_results_page():
 
     hdr_col, btn_col = st.columns([10, 2])
     with hdr_col:
-        st.markdown(f"""
-        <div style="background:#f8fafc;border:1px solid #dde3ed;border-radius:12px;
-                    padding:14px 20px;display:flex;align-items:center;gap:16px;">
-            <div style="font-size:26px;">&#128100;</div>
-            <div style="flex:1;">
-                <div style="font-size:14px;font-weight:700;color:#0f172a;">{patient_name}{age_str}</div>
-                <div style="font-size:12px;color:#64748b;margin-top:2px;">{notes_preview}{"..." if len(form_data.get("triage_notes","")) > 120 else ""}</div>
-            </div>
-            <div style="font-size:11px;color:#94a3b8;">{datetime.now(timezone.utc).strftime("%H:%M UTC")}</div>
-        </div>
-        """, unsafe_allow_html=True)
+        st.write(f"👤 **{patient_name}{age_str}**")
+        st.caption(notes_preview + ("..." if len(form_data.get("triage_notes", "")) > 120 else ""))
     with btn_col:
         if st.button("Triage Next Patient", type="primary", use_container_width=True, key="new_patient_btn"):
             for key in ["triage_notes", "age", "heart_rate", "resp_rate",
@@ -1169,6 +1257,16 @@ def render_results_page():
             st.rerun()
 
     # ── Triage decision card ──────────────────────────────────────
+    upgraded_html = f"""<div style="margin-top:10px;font-size:13px;color:{meta['color']};
+        background:{meta['badge_bg']};border-radius:8px;padding:10px 14px;">
+        ↑ <strong>Upgraded from initial assessment</strong> — clinical review flagged higher urgency
+    </div>""" if was_upgraded else ""
+
+    safety_html = f"""<div style="margin-top:10px;font-size:13px;color:#7c2d12;
+        background:#fff7ed;border:1px solid #fdba74;border-radius:8px;padding:10px 14px;">
+        ⚠️ <strong>Safety Alert:</strong> {safety_reason}
+    </div>""" if (safety_flag and safety_reason) else ""
+
     st.markdown(f"""
     <div style="background:{meta['bg']};border:1px solid {meta['border']};
                 border-left:6px solid {meta['color']};border-radius:12px;
@@ -1190,107 +1288,117 @@ def render_results_page():
             </div>
         </div>
     </div>
+    {upgraded_html}
+    {safety_html}
+    <div id="results-anchor"></div>
     """, unsafe_allow_html=True)
-
-    if was_upgraded:
-        st.markdown(f"""
-        <div style="margin-bottom:12px;font-size:13px;color:{meta['color']};
-                    background:{meta['badge_bg']};border-radius:8px;padding:10px 14px;">
-            ↑ <strong>Upgraded from initial assessment</strong> — clinical review flagged higher urgency
-        </div>
-        """, unsafe_allow_html=True)
-
-    if safety_flag and safety_reason:
-        st.markdown(f"""
-        <div style="margin-bottom:12px;font-size:13px;color:#7c2d12;
-                    background:#fff7ed;border:1px solid #fdba74;border-radius:8px;padding:10px 14px;">
-            ⚠️ <strong>Safety Alert:</strong> {safety_reason}
-        </div>
-        """, unsafe_allow_html=True)
+    # Force Streamlit out of the HTML context with a widget
+    st.empty()
 
     # ── Clinical reasoning ────────────────────────────────────────
     if clinical_rationale:
-        st.markdown(f"""
-        <div class="rationale-section">
-            <div class="confidence-title">Clinical Reasoning</div>
-            <div class="rationale-text">{clinical_rationale}</div>
-        </div>
-        """, unsafe_allow_html=True)
+        st.divider()
+        st.subheader("Clinical Reasoning")
+        st.write(clinical_rationale)
 
-    # ── Key vitals that drove the decision (from SHAP, plain English) ──
-    if top_features:
-        vital_rows = ""
-        for f in top_features:
-            name = FEATURE_DISPLAY_NAMES.get(f.get("feature", ""), f.get("feature", "").replace("_", " ").title())
-            direction = f.get("direction", "")
-            shap = f.get("shap", 0)
-            is_against = "away" in direction
-            tag_color  = "#b91c1c" if is_against else "#15803d"
-            tag_bg     = "#fee2e2" if is_against else "#dcfce7"
-            tag_text   = "Working against this level" if is_against else "Supporting this level"
-            vital_rows += f"""
-            <tr>
-                <td style="font-weight:600;color:#0f172a;">{name}</td>
-                <td><span style="background:{tag_bg};color:{tag_color};font-size:11px;
-                                 font-weight:600;padding:2px 8px;border-radius:4px;">
-                    {tag_text}
-                </span></td>
-            </tr>"""
-        st.markdown(f"""
-        <div class="rationale-section" style="margin-top:16px;">
-            <div class="confidence-title">Key Factors</div>
-            <table style="width:100%;border-collapse:collapse;font-size:13px;">
-                <tbody>{vital_rows}</tbody>
-            </table>
-        </div>
-        """, unsafe_allow_html=True)
+    # ── Key factors + Similar cases side by side ─────────────────
+    st.divider()
+    left_col, right_col = st.columns(2)
 
-    # ── Similar past cases ────────────────────────────────────────
-    if similar_cases:
-        URGENCY_LABEL = {1: "Critical", 2: "Emergent", 3: "Urgent"}
-        URGENCY_COLOR = {1: "#b91c1c", 2: "#c2410c", 3: "#a16207"}
-        URGENCY_BG    = {1: "#fee2e2", 2: "#ffedd5", 3: "#fef9c3"}
-        rows = ""
-        for c in similar_cases:
-            esi = c.get("triage_level")
-            urgency_label = URGENCY_LABEL.get(esi, "Unknown")
-            urg_color = URGENCY_COLOR.get(esi, "#64748b")
-            urg_bg    = URGENCY_BG.get(esi, "#f1f5f9")
-            outcome   = (c.get("outcome") or "—").title()
-            complaint = (c.get("chief_complaint") or "—").title()
-            diagnosis = (c.get("diagnosis") or "—").title()
-            rows += f"""
-            <tr style="border-bottom:1px solid #f1f5f9;">
-                <td style="padding:10px;font-weight:600;color:#0f172a;">{complaint}</td>
-                <td style="padding:10px;color:#475569;">{diagnosis}</td>
-                <td style="padding:10px;">
-                    <span style="background:{urg_bg};color:{urg_color};font-size:11px;
-                                 font-weight:700;padding:2px 8px;border-radius:4px;">
-                        ESI {esi} — {urgency_label}
-                    </span>
-                </td>
-                <td style="padding:10px;color:#475569;">{outcome}</td>
-            </tr>"""
-        st.markdown(f"""
-        <div class="cases-section">
-            <div class="confidence-title">Similar Past Cases</div>
-            <table style="width:100%;border-collapse:collapse;font-size:13px;">
-                <thead>
-                    <tr style="border-bottom:2px solid #e2e8f0;">
-                        <th style="text-align:left;padding:8px 10px;font-size:10px;font-weight:700;
-                                   text-transform:uppercase;letter-spacing:1px;color:#64748b;">Chief Complaint</th>
-                        <th style="text-align:left;padding:8px 10px;font-size:10px;font-weight:700;
-                                   text-transform:uppercase;letter-spacing:1px;color:#64748b;">Diagnosis</th>
-                        <th style="text-align:left;padding:8px 10px;font-size:10px;font-weight:700;
-                                   text-transform:uppercase;letter-spacing:1px;color:#64748b;">ESI Level</th>
-                        <th style="text-align:left;padding:8px 10px;font-size:10px;font-weight:700;
-                                   text-transform:uppercase;letter-spacing:1px;color:#64748b;">Outcome</th>
-                    </tr>
-                </thead>
-                <tbody>{rows}</tbody>
-            </table>
-        </div>
-        """, unsafe_allow_html=True)
+    with left_col:
+        st.subheader("Key Factors")
+        if top_features:
+            rows = ""
+            for f in top_features:
+                name = FEATURE_DISPLAY_NAMES.get(f.get("feature", ""), f.get("feature", "").replace("_", " ").title())
+                is_against = "away" in f.get("direction", "")
+                tag_color = "#b91c1c" if is_against else "#15803d"
+                tag_bg    = "#fee2e2" if is_against else "#dcfce7"
+                tag_text  = "⬆ Working against" if is_against else "⬇ Supporting"
+                rows += f"""<tr style="border-bottom:1px solid #f1f5f9;">
+                    <td style="padding:8px 4px;font-weight:600;font-size:13px;color:#0f172a;">{name}</td>
+                    <td style="padding:8px 4px;">
+                        <span style="background:{tag_bg};color:{tag_color};font-size:11px;
+                                     font-weight:600;padding:2px 8px;border-radius:4px;">{tag_text}</span>
+                    </td>
+                </tr>"""
+            st.markdown(f'<table style="width:100%;border-collapse:collapse;">{rows}</table>', unsafe_allow_html=True)
+            st.empty()
+        else:
+            st.caption("No key factors available.")
+
+    with right_col:
+        st.subheader("Similar Past Cases")
+        if not similar_cases:
+            st.caption("No similar cases retrieved.")
+        else:
+            URGENCY_LABEL = {1: "Critical", 2: "Emergent", 3: "Urgent"}
+            URGENCY_COLOR = {1: "#b91c1c", 2: "#c2410c", 3: "#a16207"}
+            URGENCY_BG    = {1: "#fee2e2", 2: "#ffedd5", 3: "#fef9c3"}
+            rows = ""
+            for c in similar_cases:
+                esi           = c.get("triage_level")
+                urgency_label = URGENCY_LABEL.get(esi, "Unknown")
+                urg_color     = URGENCY_COLOR.get(esi, "#64748b")
+                urg_bg        = URGENCY_BG.get(esi, "#f1f5f9")
+                outcome       = (c.get("outcome") or "—").title()
+                complaint     = (c.get("chief_complaint") or "—").title()
+                diagnosis     = (c.get("diagnosis") or "—").title()
+                similarity    = c.get("similarity")
+                sim_str       = f" · {int(similarity * 100)}% match" if similarity is not None else ""
+                vitals_parts  = []
+                if c.get("heart_rate"): vitals_parts.append(f"HR {c['heart_rate']}")
+                if c.get("sbp"):        vitals_parts.append(f"SBP {c['sbp']}")
+                if c.get("spo2"):       vitals_parts.append(f"SpO₂ {c['spo2']}%")
+                vitals_str = "  ·  ".join(vitals_parts)
+                patient_info = (c.get("patient_info") or "").replace("Gender: ", "").replace("Race: ", "").replace("Age: ", "")
+                rows += f"""<tr style="border-bottom:1px solid #f1f5f9;">
+                    <td style="padding:8px 4px;">
+                        <div style="font-weight:600;font-size:13px;color:#0f172a;">{complaint}</div>
+                        <div style="font-size:11px;color:#475569;margin-top:2px;">{patient_info}</div>
+                        <div style="font-size:11px;color:#64748b;margin-top:2px;">{diagnosis}{sim_str}</div>
+                        <div style="font-size:11px;color:#94a3b8;margin-top:2px;">{vitals_str}</div>
+                    </td>
+                    <td style="padding:8px 4px;white-space:nowrap;">
+                        <span style="background:{urg_bg};color:{urg_color};font-size:11px;
+                                     font-weight:700;padding:2px 8px;border-radius:4px;">ESI {esi} — {urgency_label}</span>
+                        <div style="font-size:11px;color:#94a3b8;margin-top:4px;">{outcome}</div>
+                    </td>
+                </tr>"""
+            st.markdown(f'<table style="width:100%;border-collapse:collapse;">{rows}</table>', unsafe_allow_html=True)
+            st.empty()
+
+    # ── Technical info card ───────────────────────────────────────────────────
+    LLM_ESI_LABEL_MAP = {
+        1: "ESI 1 — Critical",
+        2: "ESI 2 — Emergent",
+        3: "ESI 3 — Urgent/Less Urgent",
+    }
+
+    model_label    = triage_result.get("predicted_label", "—")
+    model_conf     = triage_result.get("confidence_pct")
+    model_conf_str = f"{model_conf}% confidence" if model_conf is not None else ""
+    llm_esi        = triage_result.get("llm_esi")
+    llm_label      = LLM_ESI_LABEL_MAP.get(llm_esi, "—")
+    reconciled     = triage_result.get("reconciled_label") or "—"
+    llm_agreement  = triage_result.get("llm_agreement")
+    agreement_str  = "Agreement" if llm_agreement else "Override"
+
+    st.divider()
+    st.subheader("Technical Details")
+    t1, t2, t3 = st.columns(3)
+    with t1:
+        st.caption("arch4 Model")
+        st.write(f"**{model_label}**")
+        if model_conf_str:
+            st.caption(model_conf_str)
+    with t2:
+        st.caption("LLM Independent")
+        st.write(f"**{llm_label}**")
+        st.caption(agreement_str)
+    with t3:
+        st.caption("Reconciled Result")
+        st.write(f"**{reconciled}**")
 
 
 # ── Main ──────────────────────────────────────────────────────────────────────

@@ -135,7 +135,7 @@ def _request_to_patient(request: TriageRequest) -> dict[str, Any]:
     return {
         "chief_complaint": request.triage_notes,
         "age":             request.age,
-        "gender":          None,  # not collected in frontend schema
+        "gender":          request.sex,
         "heart_rate":      request.heart_rate,
         "systolic_bp":     request.sbp,
         "diastolic_bp":    request.dbp,

@@ -17,6 +17,7 @@ class TriageRequest(BaseModel):
     model: str = Field(default="arch4", description="Model architecture to invoke")
     triage_notes: str = Field(..., description="Free-text clinical notes from the UI")
     age: Optional[int] = Field(default=None, description="Patient age in years")
+    sex: Optional[str] = Field(default=None, description="Patient sex: Female, Male, or Other")
     heart_rate: Optional[int] = Field(default=None, description="BPM")
     resp_rate: Optional[int] = Field(default=None, description="Breaths per minute")
     sbp: Optional[int] = Field(default=None, description="Systolic blood pressure (mmHg)")
