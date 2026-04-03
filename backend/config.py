@@ -13,6 +13,7 @@ class Settings(BaseSettings):
 
     sagemaker_endpoint_name: str = "edtriage-live"
     aws_region: str = "us-east-1"
+    aws_profile: str = "ed-triage"
     use_mock: bool = False
     default_model: str = "arch4"
 
@@ -20,6 +21,7 @@ class Settings(BaseSettings):
         "env_prefix": "TRIAGE_",
         "env_file": ".env",
         "env_file_encoding": "utf-8",
+        "extra": "ignore",
     }
 
 

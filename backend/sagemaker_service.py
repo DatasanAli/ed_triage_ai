@@ -119,7 +119,8 @@ def invoke_endpoint(payload: dict[str, Any]) -> dict[str, Any]:
         return copy.deepcopy(MOCK_SAGEMAKER_RESPONSE)
 
     logger.info("Invoking SageMaker endpoint: %s", settings.sagemaker_endpoint_name)
-    runtime = boto3.client("sagemaker-runtime", region_name=settings.aws_region)
+    session = boto3.Session(profile_name=settings.aws_profile, region_name=settings.aws_region)
+    runtime = session.client("sagemaker-runtime")
     sm_result = runtime.invoke_endpoint(
         EndpointName=settings.sagemaker_endpoint_name,
         ContentType="application/json",
