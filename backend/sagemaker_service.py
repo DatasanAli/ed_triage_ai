@@ -12,6 +12,7 @@ from __future__ import annotations
 import copy
 import json
 import logging
+import uuid
 from typing import Any
 
 import boto3
@@ -129,19 +130,72 @@ def invoke_endpoint(payload: dict[str, Any]) -> dict[str, Any]:
     return json.loads(sm_result["Body"].read().decode("utf-8"))
 
 
+def _request_to_patient(request: TriageRequest) -> dict[str, Any]:
+    """Map TriageRequest fields to the patient dict shape the triage graph expects."""
+    return {
+        "chief_complaint": request.triage_notes,
+        "age":             request.age,
+        "gender":          request.sex,
+        "heart_rate":      request.heart_rate,
+        "systolic_bp":     request.sbp,
+        "diastolic_bp":    request.dbp,
+        "resp_rate":       request.resp_rate,
+        "temperature":     request.temp_f,
+        "spo2":            request.spo2,
+        "pain":            request.pain,
+        "arrival_transport": request.arrival_transport.upper(),
+        "hpi":             request.triage_notes,
+    }
+
+
 def run_triage_inference(request: TriageRequest) -> dict[str, Any]:
     """
     Inference orchestration entry point for the /predict route.
 
-    Transforms the frontend request, calls the SageMaker endpoint, and returns
-    a response dict ready for the frontend. Future: this will delegate to the
-    orchestration/ service instead of calling invoke_endpoint directly.
+    1. Calls the SageMaker endpoint to get the ML prediction.
+    2. Passes prediction + patient data through the LangGraph agentic pipeline
+       (RAG retrieval + LLM clinical analysis + synthesis).
+    3. Returns the enriched final_report shaped for TriageResponse.
     """
+    from src.agents.graph import triage_graph  # imported here to avoid circular import at module load
+
     model_used = request.model or settings.default_model
     sm_payload = transform_request(request)
 
     logger.info("Request payload (SageMaker format): %s", json.dumps(sm_payload, indent=2))
     raw_response = invoke_endpoint(sm_payload)
-    result = transform_response(raw_response, model_used)
-    logger.info("Response payload (frontend format): %s", json.dumps(result, indent=2))
+    logger.info("SageMaker raw response: %s", json.dumps(raw_response, indent=2))
+
+    patient = _request_to_patient(request)
+    thread_id = str(uuid.uuid4())
+
+    graph_result = triage_graph.invoke(
+        {"patient": patient, "prediction": raw_response},
+        config={"configurable": {"thread_id": thread_id}},
+    )
+    report = graph_result["final_report"]
+
+    # Shape final_report into the TriageResponse contract
+    probs = report.get("probabilities", {})
+    result = {
+        "predicted_class": report["triage_class"],
+        "predicted_label": report["triage_level"],
+        "probabilities":   probs,
+        "top_features":    report.get("shap_features") or [],
+        "safety_flag":     report.get("safety_flag") or False,
+        "safety_reason":   report.get("safety_reason"),
+        "model_used":      model_used,
+        # Enriched fields from the agentic pipeline
+        "reconciled_label":   report.get("reconciled_level"),
+        "reconciled_class":   report.get("reconciled_class"),
+        "llm_esi":            report.get("llm_esi"),
+        "llm_agreement":      report.get("llm_agreement"),
+        "clinical_rationale": report.get("clinical_rationale"),
+        "similar_cases":      report.get("similar_cases") or [],
+        "flags":              report.get("flags") or [],
+        "confidence_pct":     report.get("confidence_pct"),
+        "uncertainty_flag":   report.get("uncertainty_flag", False),
+    }
+
+    logger.info("Enriched response: %s", json.dumps(result, indent=2, default=str))
     return result

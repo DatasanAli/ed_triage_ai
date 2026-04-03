@@ -112,6 +112,19 @@ def inject_css():
     .stApp, [data-testid="stAppViewContainer"] {
         background-color: var(--surface) !important;
         font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif !important;
+        color: #171c22 !important;
+    }
+
+    /* Ensure all native Streamlit text elements are dark */
+    .stApp p:not(button p):not([data-testid="stButton"] p),
+    .stApp h1, .stApp h2, .stApp h3, .stApp label {
+        color: #171c22;
+    }
+
+    /* Restore white text on primary buttons */
+    [data-testid="stButton"] > button[kind="primary"] p,
+    [data-testid="stButton"] > button[kind="primary"] span {
+        color: white !important;
     }
 
     [data-testid="stHeader"] { background: transparent !important; }
@@ -394,26 +407,36 @@ def inject_css():
 
     /* ── Input field overrides ─────────────────────────────────── */
     [data-testid="stNumberInput"] input,
-    [data-testid="stTextArea"] textarea,
-    [data-testid="stSelectbox"] [data-baseweb="select"] {
-        background: var(--surface-container-lowest) !important;
-        border: none !important;
+    [data-testid="stTextInput"] input,
+    [data-testid="stTextArea"] textarea {
+        background: #f8fafc !important;
+        border: 1px solid #dde3ed !important;
         border-radius: 8px !important;
-        font-weight: 700 !important;
+        font-weight: 500 !important;
+        font-size: 14px !important;
         color: var(--on-surface) !important;
         font-family: 'Inter', sans-serif !important;
+        padding: 10px 14px !important;
+    }
+    [data-testid="stNumberInput"] input:focus,
+    [data-testid="stTextInput"] input:focus,
+    [data-testid="stTextArea"] textarea:focus {
+        border-color: var(--primary) !important;
+        box-shadow: 0 0 0 3px rgba(0,71,141,0.08) !important;
+        background: #fff !important;
     }
     [data-testid="stTextArea"] textarea {
-        background: var(--surface-container-low) !important;
+        font-size: 14px !important;
         font-weight: 400 !important;
-        font-size: 16px !important;
         line-height: 1.7 !important;
+        resize: none !important;
     }
-    [data-testid="stTextArea"] textarea:focus {
-        box-shadow: 0 0 0 2px var(--primary-fixed) !important;
-    }
-    [data-testid="stNumberInput"] input:focus {
-        box-shadow: 0 0 0 2px var(--primary-fixed) !important;
+    [data-testid="stSelectbox"] [data-baseweb="select"] > div {
+        background: #f8fafc !important;
+        border: 1px solid #dde3ed !important;
+        border-radius: 8px !important;
+        font-size: 14px !important;
+        color: var(--on-surface) !important;
     }
 
     /* hide default streamlit labels — we use custom HTML labels */
@@ -431,6 +454,30 @@ def inject_css():
     [data-testid="stSlider"] [data-testid="stTickBarMin"],
     [data-testid="stSlider"] [data-testid="stTickBarMax"] {
         display: none !important;
+    }
+
+    /* ── Intake form card ──────────────────────────────────────── */
+    .intake-card {
+        background: #ffffff;
+        border-radius: 16px;
+        border: 1px solid #e2e8f0;
+        box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+        padding: 32px 36px;
+        margin-bottom: 24px;
+    }
+    .intake-section-title {
+        font-size: 11px; font-weight: 700;
+        text-transform: uppercase; letter-spacing: 1.5px;
+        color: var(--on-surface-variant);
+        margin-bottom: 16px; margin-top: 24px;
+        padding-bottom: 8px;
+        border-bottom: 1px solid #f1f5f9;
+    }
+    .intake-section-title:first-child { margin-top: 0; }
+    .field-label {
+        font-size: 12px; font-weight: 600;
+        color: #475569; margin-bottom: 4px;
+        letter-spacing: 0.2px;
     }
 
     /* ── Results page styles ───────────────────────────────────── */
@@ -641,6 +688,76 @@ def inject_css():
         color: var(--on-surface); line-height: 1.4;
     }
 
+    /* Reconciled banner */
+    .reconciled-banner {
+        background: #fffbeb; border: 1px solid #f59e0b;
+        border-left: 6px solid #f59e0b;
+        border-radius: 8px; padding: 16px 20px;
+        margin-bottom: 20px;
+        display: flex; align-items: flex-start; gap: 12px;
+    }
+    .reconciled-icon { font-size: 20px; flex-shrink: 0; margin-top: 1px; }
+    .reconciled-title {
+        font-size: 13px; font-weight: 700; color: #92400e; margin-bottom: 4px;
+    }
+    .reconciled-body { font-size: 13px; color: #78350f; line-height: 1.5; }
+
+    /* Flags */
+    .flags-section {
+        margin-bottom: 20px;
+    }
+    .flag-item {
+        display: flex; align-items: flex-start; gap: 10px;
+        background: rgba(255,218,214,0.25);
+        border: 1px solid rgba(187,27,33,0.2);
+        border-radius: 8px; padding: 12px 16px;
+        margin-bottom: 8px; font-size: 13px;
+        color: var(--on-error-container); line-height: 1.5;
+    }
+    .flag-icon { flex-shrink: 0; font-size: 14px; margin-top: 1px; }
+
+    /* Clinical rationale */
+    .rationale-section {
+        background: var(--surface-container-lowest);
+        border-radius: 12px; padding: 24px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+        margin-bottom: 20px;
+    }
+    .rationale-text {
+        font-size: 14px; color: var(--on-surface);
+        line-height: 1.75; white-space: pre-wrap;
+    }
+
+    /* Similar cases table */
+    .cases-section {
+        background: var(--surface-container-lowest);
+        border-radius: 12px; padding: 24px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+        margin-bottom: 20px;
+    }
+    .cases-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    .cases-table th {
+        font-family: 'Public Sans', sans-serif;
+        font-size: 10px; font-weight: 700; text-transform: uppercase;
+        letter-spacing: 1px; color: var(--on-surface-variant);
+        padding: 8px 10px; border-bottom: 1px solid var(--outline-variant);
+        text-align: left;
+    }
+    .cases-table td {
+        padding: 10px 10px; color: var(--on-surface);
+        border-bottom: 1px solid var(--surface-container);
+        vertical-align: top;
+    }
+    .cases-table tr:last-child td { border-bottom: none; }
+    .esi-badge {
+        display: inline-block; font-weight: 700; font-size: 11px;
+        padding: 2px 8px; border-radius: 4px;
+    }
+    .esi-1 { background: var(--tertiary-fixed); color: var(--tertiary); }
+    .esi-2 { background: var(--primary-fixed); color: var(--primary); }
+    .esi-3 { background: var(--surface-container-highest); color: var(--secondary); }
+    .sim-score { font-weight: 600; color: var(--primary); }
+
     /* Footer status bar */
     .footer-bar {
         display: flex; justify-content: space-between;
@@ -659,29 +776,16 @@ def inject_css():
         margin-right: 6px;
     }
 
-    /* ── Streamlit number input hide steppers for cleaner look ── */
-    [data-testid="stNumberInput"] button {
-        display: none !important;
-    }
+    /* Hide number input steppers */
+    [data-testid="stNumberInput"] button { display: none !important; }
+    [data-testid="stNumberInput"] > div { gap: 0 !important; }
 
-    /* Make text area label hidden since we use custom */
+    /* Hide text area label */
     [data-testid="stTextArea"] label { display: none !important; }
 
-    /* ── Force sidebar to always be visible ────────────────────── */
-    /* Override Streamlit's collapsed transform so sidebar is always open */
-    section[data-testid="stSidebar"] {
-        min-width: 244px !important;
-        transform: none !important;
-        left: 0 !important;
-        visibility: visible !important;
-    }
-    /* Hide only the buttons that trigger collapsing — not the reopen chevron */
+    /* ── Hide sidebar entirely ──────────────────────────────────── */
+    section[data-testid="stSidebar"],
     [data-testid="stSidebarCollapseButton"],
-    button[aria-label="Close sidebar"],
-    button[aria-label="Collapse sidebar"] {
-        display: none !important;
-    }
-    /* Also hide the floating reopen chevron (sidebar is always open now) */
     [data-testid="collapsedControl"] {
         display: none !important;
     }
@@ -724,6 +828,54 @@ def inject_css():
         border-right-color: #1d4ed8 !important;
         font-weight: 600 !important;
     }
+
+    /* ── Loading overlay ───────────────────────────────────────── */
+    .triage-overlay {
+        position: fixed;
+        inset: 0;
+        background: rgba(15, 23, 42, 0.55);
+        backdrop-filter: blur(3px);
+        z-index: 9999;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    .triage-overlay-card {
+        background: #ffffff;
+        border-radius: 16px;
+        padding: 40px 48px;
+        width: 420px;
+        box-shadow: 0 20px 60px rgba(0,0,0,0.25);
+        text-align: center;
+    }
+    .overlay-title {
+        font-size: 17px;
+        font-weight: 700;
+        color: #0f172a;
+        margin-bottom: 6px;
+    }
+    .overlay-subtitle {
+        font-size: 13px;
+        color: #64748b;
+        margin-bottom: 28px;
+    }
+    .overlay-step {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 10px 0;
+        border-bottom: 1px solid #f1f5f9;
+        text-align: left;
+    }
+    .overlay-step:last-child { border-bottom: none; }
+    .overlay-step-icon { font-size: 18px; width: 28px; text-align: center; }
+    .overlay-step-text { font-size: 13px; flex: 1; }
+    .step-done   { color: #94a3b8; }
+    .step-done .overlay-step-text { text-decoration: line-through; }
+    .step-active { color: #1d4ed8; font-weight: 600; }
+    .step-pending { color: #cbd5e1; }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+    .step-active .overlay-step-icon { animation: pulse 1.2s ease-in-out infinite; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -753,7 +905,7 @@ def render_sidebar():
             if st.button("\U0001f464  Patient Intake", key="nav_intake_btn", use_container_width=True):
                 for key in ["triage_notes", "age", "heart_rate", "resp_rate",
                             "sbp", "dbp", "spo2", "temp_f", "pain",
-                            "arrival_transport", "form_data", "triage_result"]:
+                            "arrival_transport", "form_data", "triage_result", "is_loading"]:
                     if key in st.session_state:
                         del st.session_state[key]
                 st.session_state.page = "intake"
@@ -780,7 +932,11 @@ def render_sidebar():
 # ── Page 1: Intake form ──────────────────────────────────────────────────────
 
 def render_intake_page():
-    # Top header bar
+    import json as _json
+    import threading, time as _time
+
+    is_loading = st.session_state.get("is_loading", False)
+
     st.markdown("""
     <div class="top-header">
         <div class="top-header-left">
@@ -789,7 +945,6 @@ def render_intake_page():
             <span class="page-title">New Patient Entry</span>
         </div>
         <div class="top-header-right">
-            <span class="search-box">&#128269; &nbsp;Search Patients...</span>
             <span class="header-icon">&#128276;</span>
             <span class="header-icon">&#9881;</span>
             <div class="avatar">&#128100;</div>
@@ -797,230 +952,237 @@ def render_intake_page():
     </div>
     """, unsafe_allow_html=True)
 
-    # Two-column layout
-    left_col, right_col = st.columns([3, 2], gap="large")
+    # ── Collapsed summary shown while loading ─────────────────────
+    if is_loading:
+        fd = st.session_state.get("form_data", {})
+        first = fd.get("first_name", "").strip()
+        last  = fd.get("last_name", "").strip()
+        name  = f"{first} {last}".strip() or "Patient"
+        age   = fd.get("age")
+        notes = fd.get("triage_notes", "")[:120]
+        age_str = f", {age}y" if age else ""
+        st.markdown(f"👤 **{name}{age_str}**")
+        st.caption(notes + ("..." if len(fd.get("triage_notes", "")) > 120 else ""))
+    else:
+        # ── Dev shortcut ─────────────────────────────────────────
+        if st.button("🧪 Fill Test Patient (Dorothy)", key="fill_test"):
+            st.session_state.first_name = "Dorothy"
+            st.session_state.last_name = "Williams"
+            st.session_state.age = 68
+            st.session_state.sex = "Female"
+            st.session_state.triage_notes = "Fever, confusion, and low blood pressure for the past 6 hours"
+            st.session_state.heart_rate = 118
+            st.session_state.resp_rate = 24
+            st.session_state.sbp = 88
+            st.session_state.dbp = 52
+            st.session_state.spo2 = 93
+            st.session_state.temp_f = 101.8
+            st.session_state.pain = 6
+            st.session_state.arrival_transport = "Ambulance"
+            st.rerun()
 
-    with left_col:
-        # Primary Documentation card
-        st.markdown("""
-        <div class="card" style="min-height: 580px; display: flex; flex-direction: column;">
-            <div style="display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 20px;">
-                <div>
-                    <div class="section-label primary">Primary Documentation</div>
-                    <div class="section-title" style="margin-bottom: 0;">Triage Notes</div>
-                </div>
-                <div class="badge-row">
-                    <span class="badge">Voice Enabled</span>
-                    <span class="badge">Autosave Active</span>
-                </div>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
+        # ── Patient Info ─────────────────────────────────────────
+        st.markdown('<div class="intake-section-title">Patient Information</div>', unsafe_allow_html=True)
+        c1, c2, c3, c4 = st.columns([2, 2, 1, 1])
+        with c1:
+            st.markdown('<div class="field-label">First Name</div>', unsafe_allow_html=True)
+            st.text_input("First Name", key="first_name", placeholder="Jane", label_visibility="collapsed")
+        with c2:
+            st.markdown('<div class="field-label">Last Name</div>', unsafe_allow_html=True)
+            st.text_input("Last Name", key="last_name", placeholder="Smith", label_visibility="collapsed")
+        with c3:
+            st.markdown('<div class="field-label">Age</div>', unsafe_allow_html=True)
+            st.number_input("Age", min_value=0, max_value=120, value=None, key="age",
+                            placeholder="—", label_visibility="collapsed")
+        with c4:
+            st.markdown('<div class="field-label">Sex</div>', unsafe_allow_html=True)
+            st.selectbox("Sex", ["—", "Female", "Male", "Other"], key="sex", label_visibility="collapsed")
 
-        # Overlay the text area on top of the card using negative margin
-        st.markdown("<div style='margin-top:-520px; padding: 0 32px 32px;'>",
-                    unsafe_allow_html=True)
+        # ── Triage Notes ─────────────────────────────────────────
+        st.markdown('<div class="intake-section-title">Triage Notes</div>', unsafe_allow_html=True)
         st.text_area(
-            "Triage Notes",
-            height=450,
-            key="triage_notes",
-            placeholder="Enter chief complaint, detailed symptoms, and medical history here...",
+            "Triage Notes", height=160, key="triage_notes",
+            placeholder="Chief complaint, symptoms, relevant history...",
             label_visibility="collapsed",
         )
-        st.markdown("</div>", unsafe_allow_html=True)
 
-    with right_col:
-        # Vitals panel
-        st.markdown("""
-        <div class="section-label secondary">Diagnostic Layer</div>
-        <div class="section-title">Optional Vitals</div>
-        """, unsafe_allow_html=True)
-
-        # First Name | Last Name
-        n1, n2 = st.columns(2)
-        with n1:
-            st.markdown('<div class="vital-label">First Name</div>', unsafe_allow_html=True)
-            st.text_input("First Name", key="first_name", placeholder="Jane",
-                          label_visibility="collapsed")
-        with n2:
-            st.markdown('<div class="vital-label">Last Name</div>', unsafe_allow_html=True)
-            st.text_input("Last Name", key="last_name", placeholder="Smith",
-                          label_visibility="collapsed")
-
-        # Age — full width
-        st.markdown('<div class="vital-label">Age</div>', unsafe_allow_html=True)
-        st.number_input("Age", min_value=0, max_value=120, value=None,
-                        key="age", placeholder="Years", label_visibility="collapsed")
-
-        # Heart Rate | RR
-        v1, v2 = st.columns(2)
+        # ── Vitals ───────────────────────────────────────────────
+        st.markdown('<div class="intake-section-title">Vitals</div>', unsafe_allow_html=True)
+        v1, v2, v3, v4, v5, v6 = st.columns(6)
         with v1:
-            st.markdown('<div class="vital-label">Heart Rate (BPM)</div>',
-                        unsafe_allow_html=True)
-            st.number_input("Heart Rate", min_value=20, max_value=250,
-                            value=None, key="heart_rate", placeholder="72",
-                            label_visibility="collapsed")
+            st.markdown('<div class="field-label">Heart Rate</div>', unsafe_allow_html=True)
+            st.number_input("HR", min_value=20, max_value=250, value=None, key="heart_rate",
+                            placeholder="BPM", label_visibility="collapsed")
         with v2:
-            st.markdown('<div class="vital-label">RR (Breaths/m)</div>',
-                        unsafe_allow_html=True)
-            st.number_input("RR", min_value=4, max_value=60, value=None,
-                            key="resp_rate", placeholder="16",
-                            label_visibility="collapsed")
-
-        # SBP | DBP
-        v3, v4 = st.columns(2)
+            st.markdown('<div class="field-label">Resp Rate</div>', unsafe_allow_html=True)
+            st.number_input("RR", min_value=4, max_value=60, value=None, key="resp_rate",
+                            placeholder="br/m", label_visibility="collapsed")
         with v3:
-            st.markdown('<div class="vital-label">SBP (mmHg)</div>',
-                        unsafe_allow_html=True)
-            st.number_input("SBP", min_value=40, max_value=300, value=None,
-                            key="sbp", placeholder="120",
-                            label_visibility="collapsed")
+            st.markdown('<div class="field-label">SBP</div>', unsafe_allow_html=True)
+            st.number_input("SBP", min_value=40, max_value=300, value=None, key="sbp",
+                            placeholder="mmHg", label_visibility="collapsed")
         with v4:
-            st.markdown('<div class="vital-label">DBP (mmHg)</div>',
-                        unsafe_allow_html=True)
-            st.number_input("DBP", min_value=10, max_value=200, value=None,
-                            key="dbp", placeholder="80",
-                            label_visibility="collapsed")
-
-        # SpO2 | Temp
-        v5, v6 = st.columns(2)
+            st.markdown('<div class="field-label">DBP</div>', unsafe_allow_html=True)
+            st.number_input("DBP", min_value=10, max_value=200, value=None, key="dbp",
+                            placeholder="mmHg", label_visibility="collapsed")
         with v5:
-            st.markdown('<div class="vital-label">SpO2 (%)</div>',
-                        unsafe_allow_html=True)
-            st.number_input("SpO2", min_value=50, max_value=100, value=None,
-                            key="spo2", placeholder="98",
-                            label_visibility="collapsed")
+            st.markdown('<div class="field-label">SpO2</div>', unsafe_allow_html=True)
+            st.number_input("SpO2", min_value=50, max_value=100, value=None, key="spo2",
+                            placeholder="%", label_visibility="collapsed")
         with v6:
-            st.markdown('<div class="vital-label">Temp (F)</div>',
-                        unsafe_allow_html=True)
-            st.number_input("Temp", min_value=85.0, max_value=115.0,
-                            value=None, key="temp_f", placeholder="98.6",
-                            step=0.1, label_visibility="collapsed")
+            st.markdown('<div class="field-label">Temp (°F)</div>', unsafe_allow_html=True)
+            st.number_input("Temp", min_value=85.0, max_value=115.0, value=None, key="temp_f",
+                            placeholder="°F", step=0.1, label_visibility="collapsed")
 
-        # Pain slider
-        pain_val = st.session_state.get("pain", 4)
-        st.markdown(f"""
-        <div class="pain-header">
-            <span class="pain-label">Pain Level (0-10)</span>
-            <span class="pain-value">{pain_val} / 10</span>
-        </div>
-        """, unsafe_allow_html=True)
-        st.slider("Pain", min_value=0, max_value=10, value=4,
-                  key="pain", label_visibility="collapsed")
-        st.markdown("""
-        <div class="pain-range">
-            <span>None</span>
-            <span>Severe</span>
-        </div>
-        """, unsafe_allow_html=True)
+        # ── Pain + Transport ─────────────────────────────────────
+        st.markdown('<div class="intake-section-title">Assessment</div>', unsafe_allow_html=True)
+        p_col, t_col = st.columns([1, 3])
+        with p_col:
+            st.markdown('<div class="field-label">Pain (0–10)</div>', unsafe_allow_html=True)
+            st.number_input("Pain", min_value=0, max_value=10, value=None, key="pain",
+                            placeholder="0–10", label_visibility="collapsed")
+        with t_col:
+            st.markdown('<div class="field-label">Arrival Transport</div>', unsafe_allow_html=True)
+            st.selectbox("Transport", TRANSPORT_OPTIONS, key="arrival_transport", label_visibility="collapsed")
 
-        # Arrival transport
-        st.markdown('<div class="vital-label" style="margin-top:12px;">Arrival Transport</div>',
-                    unsafe_allow_html=True)
-        st.selectbox("Transport", TRANSPORT_OPTIONS, key="arrival_transport",
-                     label_visibility="collapsed")
+    # ── Submit button (hidden while loading via CSS overlay) ─────
+    if not is_loading:
+        _l, center, _r = st.columns([2, 3, 2])
+        with center:
+            clicked = st.button(
+                "Run Triage Assessment",
+                type="primary",
+                use_container_width=True,
+                key="submit_btn",
+            )
+    else:
+        clicked = False
 
-        # System monitoring indicator
-        st.markdown("""
-        <div class="monitor-card">
-            <div class="pulse-ring">
-                <span class="pulse-icon">&#9764;</span>
+    overlay_slot = st.empty()
+
+    if clicked and not is_loading:
+        _sex_raw = st.session_state.get("sex", "—")
+        form_data = {
+            "first_name": st.session_state.get("first_name", ""),
+            "last_name": st.session_state.get("last_name", ""),
+            "age": st.session_state.get("age"),
+            "sex": _sex_raw if _sex_raw != "—" else None,
+            "triage_notes": st.session_state.get("triage_notes", ""),
+            "heart_rate": st.session_state.get("heart_rate"),
+            "resp_rate": st.session_state.get("resp_rate"),
+            "sbp": st.session_state.get("sbp"),
+            "dbp": st.session_state.get("dbp"),
+            "spo2": st.session_state.get("spo2"),
+            "temp_f": st.session_state.get("temp_f"),
+            "pain": st.session_state.get("pain"),
+            "arrival_transport": st.session_state.get("arrival_transport", "Walk In"),
+        }
+        st.session_state.form_data = form_data
+        st.session_state.is_loading = True
+        st.rerun()
+
+    if is_loading:
+        _backend_keys = {"triage_notes", "age", "sex", "heart_rate", "resp_rate",
+                         "sbp", "dbp", "spo2", "temp_f", "pain", "arrival_transport"}
+        form_data = st.session_state.get("form_data", {})
+        payload = {k: v for k, v in form_data.items()
+                   if k in _backend_keys and v is not None}
+
+        result_holder = {}
+
+        def _do_request():
+            try:
+                r = requests.post(f"{BACKEND_URL}/predict", json=payload, timeout=120)
+                r.raise_for_status()
+                result_holder["data"] = r.json()
+            except Exception as e:
+                result_holder["error"] = e
+
+        thread = threading.Thread(target=_do_request)
+        thread.start()
+
+        steps = [
+            ("🔬", "Running ML model inference"),
+            ("🔍", "Retrieving similar historical cases"),
+            ("🧠", "LLM clinical analysis"),
+            ("📋", "Synthesizing triage recommendation"),
+        ]
+
+        def _render_overlay(current_idx):
+            rows = ""
+            for i, (icon, msg) in enumerate(steps):
+                if i < current_idx:
+                    rows += f'<div class="overlay-step step-done"><span class="overlay-step-icon">✓</span><span class="overlay-step-text">{msg}</span></div>'
+                elif i == current_idx:
+                    rows += f'<div class="overlay-step step-active"><span class="overlay-step-icon">{icon}</span><span class="overlay-step-text">{msg}…</span></div>'
+                else:
+                    rows += f'<div class="overlay-step step-pending"><span class="overlay-step-icon">{icon}</span><span class="overlay-step-text">{msg}</span></div>'
+            overlay_slot.markdown(f"""
+            <div class="triage-overlay">
+                <div class="triage-overlay-card">
+                    <div class="overlay-title">Analyzing Patient</div>
+                    <div class="overlay-subtitle">Running triage assessment pipeline…</div>
+                    {rows}
+                </div>
             </div>
-            <div>
-                <div class="monitor-label">System Monitoring</div>
-                <div class="monitor-status">Ready for diagnostic stream</div>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
+            """, unsafe_allow_html=True)
 
-        # Tip card
-        st.markdown("""
-        <div class="tip-card">
-            <div class="tip-icon-box">&#128161;</div>
-            <div>
-                <div class="tip-title">Did you know?</div>
-                <div class="tip-text">Type 'HX' to quickly import patient's known clinical history.</div>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
+        step_idx = 0
+        while thread.is_alive():
+            _render_overlay(min(step_idx, len(steps) - 1))
+            _time.sleep(4)
+            step_idx += 1
 
-    # Submit button — centered
-    _l, center, _r = st.columns([1, 2, 1])
-    with center:
-        if st.button("&#10004;  Complete Triage Assessment", type="primary",
-                     use_container_width=True, key="submit_btn"):
-            form_data = {
-                "first_name": st.session_state.get("first_name", ""),
-                "last_name": st.session_state.get("last_name", ""),
-                "triage_notes": st.session_state.get("triage_notes", ""),
-                "age": st.session_state.get("age"),
-                "heart_rate": st.session_state.get("heart_rate"),
-                "resp_rate": st.session_state.get("resp_rate"),
-                "sbp": st.session_state.get("sbp"),
-                "dbp": st.session_state.get("dbp"),
-                "spo2": st.session_state.get("spo2"),
-                "temp_f": st.session_state.get("temp_f"),
-                "pain": st.session_state.get("pain", 4),
-                "arrival_transport": st.session_state.get(
-                    "arrival_transport", "Walk In"),
-            }
-            st.session_state.form_data = form_data
+        thread.join()
+        overlay_slot.empty()
+        st.session_state.is_loading = False
 
-            # POST to /predict — exclude display-only fields from ML payload
-            with st.spinner("Analyzing triage data..."):
-                try:
-                    _backend_keys = {"triage_notes", "age", "heart_rate", "resp_rate",
-                                     "sbp", "dbp", "spo2", "temp_f", "pain", "arrival_transport"}
-                    payload = {k: v for k, v in form_data.items()
-                               if k in _backend_keys and v is not None}
-                    import json as _json
-                    print(f"[TriagePulse] → POST {BACKEND_URL}/predict")
-                    print(f"[TriagePulse]   payload: {_json.dumps(payload, indent=2)}")
-                    resp = requests.post(
-                        f"{BACKEND_URL}/predict",
-                        json=payload,
-                        timeout=30,
-                    )
-                    resp.raise_for_status()
-                    triage_result = resp.json()
-                    print(f"[TriagePulse] ← {resp.status_code} response:")
-                    print(f"[TriagePulse]   {_json.dumps(triage_result, indent=2)}")
-                except requests.exceptions.ConnectionError:
-                    st.error(
-                        f"Cannot reach the backend at {BACKEND_URL}. "
-                        "Make sure `uvicorn backend.main:app --reload --port 8000` is running."
-                    )
-                    st.stop()
-                except requests.exceptions.HTTPError as exc:
-                    st.error(
-                        f"Backend returned an error: "
-                        f"{exc.response.status_code} — {exc.response.text}"
-                    )
-                    st.stop()
-                except Exception as exc:
-                    st.error(f"Unexpected error calling backend: {exc}")
-                    st.stop()
+        if "error" in result_holder:
+            exc = result_holder["error"]
+            if isinstance(exc, requests.exceptions.ConnectionError):
+                st.error(f"Cannot reach the backend at {BACKEND_URL}. "
+                         "Make sure `uvicorn backend.main:app --reload --port 8000` is running.")
+            elif isinstance(exc, requests.exceptions.HTTPError):
+                st.error(f"Backend returned an error: {exc.response.status_code} — {exc.response.text}")
+            else:
+                st.error(f"Unexpected error: {exc}")
+            st.stop()
 
-            # Store result in session state
-            st.session_state.triage_result = triage_result
+        triage_result = result_holder["data"]
+        print(f"[TriagePulse] ← response: {_json.dumps(triage_result, indent=2)}")
 
-            # Append to history (keep last 20)
-            history_entry = {
-                "timestamp": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC"),
-                "triage_notes": form_data.get("triage_notes", ""),
-                "result": triage_result,
-            }
-            st.session_state.triage_history.insert(0, history_entry)
-            if len(st.session_state.triage_history) > 20:
-                st.session_state.triage_history = st.session_state.triage_history[:20]
+        st.session_state.triage_result = triage_result
+        history_entry = {
+            "timestamp": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC"),
+            "triage_notes": form_data.get("triage_notes", ""),
+            "result": triage_result,
+        }
+        st.session_state.triage_history.insert(0, history_entry)
+        if len(st.session_state.triage_history) > 20:
+            st.session_state.triage_history = st.session_state.triage_history[:20]
 
-            st.session_state.page = "results"
-            st.rerun()
+        st.session_state.page = "results"
+        st.rerun()
 
 
 # ── Page 2: Results ──────────────────────────────────────────────────────────
 
 def render_results_page():
+    st.markdown("""
+    <div class="top-header">
+        <div class="top-header-left">
+            <span class="brand-name">TriagePulse</span>
+            <div class="header-divider"></div>
+            <span class="page-title">Triage Assessment</span>
+        </div>
+        <div class="top-header-right">
+            <span class="header-icon">&#128276;</span>
+            <span class="header-icon">&#9881;</span>
+            <div class="avatar">&#128100;</div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
     # Pull real data from session state — no mocks
     triage_result = st.session_state.get("triage_result", {})
     form_data = st.session_state.get("form_data", {})
@@ -1032,228 +1194,211 @@ def render_results_page():
             st.rerun()
         return
 
-    prob = triage_result.get("probabilities", {
-        "L1-Critical": 0.0, "L2-Emergent": 0.0, "L3-Urgent/LessUrgent": 0.0
-    })
     predicted_label = triage_result.get("predicted_label", "Unknown")
-    model_used = triage_result.get("model_used", "arch4")
-    safety_flag = triage_result.get("safety_flag", False)
-    safety_reason = triage_result.get("safety_reason", None)
-    top_features = triage_result.get("top_features", [])
+    model_used      = triage_result.get("model_used", "arch4")
+    safety_flag     = triage_result.get("safety_flag", False)
+    safety_reason   = triage_result.get("safety_reason", None)
+    top_features    = triage_result.get("top_features", [])
 
-    # Derive UI data from real backend response
-    drivers = shap_features_to_drivers(top_features)
-    recommendations = label_to_recommendations(predicted_label)
+    reconciled_label   = triage_result.get("reconciled_label") or predicted_label
+    llm_agreement      = triage_result.get("llm_agreement")
+    clinical_rationale = triage_result.get("clinical_rationale")
+    similar_cases      = triage_result.get("similar_cases") or []
+    was_upgraded       = llm_agreement is False and reconciled_label != predicted_label
 
-    # Patient vitals from submitted form_data
-    hr_val = form_data.get("heart_rate")
-    sbp_val = form_data.get("sbp")
-    dbp_val = form_data.get("dbp")
-    age_val = form_data.get("age")
-    hr_display = str(hr_val) if hr_val is not None else "—"
-    bp_display = (
-        f"{sbp_val}/{dbp_val}"
-        if sbp_val is not None and dbp_val is not None
-        else "—"
-    )
-    age_display = f"{age_val}Y" if age_val is not None else ""
+    # Nurse-friendly label/colour mapping
+    LEVEL_META = {
+        "L1-Critical": {
+            "color": "#b91c1c", "bg": "#fef2f2", "border": "#fca5a5",
+            "badge_bg": "#fee2e2", "badge_color": "#991b1b",
+            "title": "ESI 1 — Immediate / Critical",
+            "action": "Bring to resuscitation bay immediately. Do not leave unattended.",
+            "icon": "🚨",
+        },
+        "L2-Emergent": {
+            "color": "#c2410c", "bg": "#fff7ed", "border": "#fdba74",
+            "badge_bg": "#ffedd5", "badge_color": "#9a3412",
+            "title": "ESI 2 — Emergent",
+            "action": "Assign to monitored bed within 15 minutes. Notify attending.",
+            "icon": "⚠️",
+        },
+        "L3-Urgent": {
+            "color": "#a16207", "bg": "#fefce8", "border": "#fde047",
+            "badge_bg": "#fef9c3", "badge_color": "#854d0e",
+            "title": "ESI 3 — Urgent / Less Urgent",
+            "action": "Place in waiting area. Reassess vitals every 30 minutes.",
+            "icon": "🔔",
+        },
+    }
+    # Normalise key
+    rec_key = reconciled_label.replace("/LessUrgent", "").replace("LessUrgent", "").strip()
+    meta = LEVEL_META.get(rec_key, LEVEL_META["L3-Urgent"])
 
-    # Parse label for display (e.g. "L1-Critical" → level_code="L1", level_desc="CRITICAL")
-    label_parts = predicted_label.split("-", 1)
-    level_code = label_parts[0] if label_parts else predicted_label
-    level_desc = label_parts[1].upper() if len(label_parts) > 1 else ""
+    # ── Patient header + new patient button ──────────────────────
+    first_name   = form_data.get("first_name", "").strip()
+    last_name    = form_data.get("last_name", "").strip()
+    patient_name = f"{first_name} {last_name}".strip() or "Patient"
+    age_val      = form_data.get("age")
+    notes_preview = form_data.get("triage_notes", "")[:120]
+    age_str      = f", {age_val}y" if age_val else ""
 
-    # Breadcrumb + header
-    st.markdown("""
-    <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 24px;">
-        <div>
-            <div class="breadcrumb">
-                TRIAGE WORKFLOW &nbsp;&#8250;&nbsp; PATIENT ASSESSMENT &nbsp;&#8250;&nbsp;
-                <span class="active">ANALYSIS RESULT</span>
-            </div>
-            <div class="results-title">Diagnostic Output</div>
-        </div>
-        <div class="assigned-to">
-            <div class="avatar" style="width:36px;height:36px;">&#128105;&#8205;&#9877;</div>
-            <div>
-                <div class="assigned-label">Assigned To</div>
-                <div class="assigned-name">Dr. Aris Thorne</div>
-            </div>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
-
-    # Safety flag banner
-    if safety_flag and safety_reason:
-        st.warning(f"\u26a0\ufe0f **Safety Alert:** {safety_reason}")
-
-    left_col, right_col = st.columns([7, 5], gap="large")
-
-    with left_col:
-        # Priority card — derived from predicted_label
-        st.markdown(f"""
-        <div class="priority-card">
-            <div class="priority-content">
-                <div class="priority-badge">PREDICTED PRIORITY</div>
-                <div class="priority-level">{level_code} -<br>{level_desc}</div>
-                <div class="priority-desc">
-                    Model: <strong>{model_used}</strong>. Based on submitted vitals and
-                    triage notes, the system classified this patient as
-                    <strong>{predicted_label}</strong>.
-                </div>
-            </div>
-            <div class="target-zone">
-                <div class="target-icon">&#9888;</div>
-                <div class="target-label">Predicted Class</div>
-                <div class="target-name">{predicted_label}</div>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
-
-        # Confidence + Drivers side by side
-        c_left, c_right = st.columns(2)
-
-        with c_left:
-            l1_pct = prob.get("L1-Critical", 0.0) * 100
-            l2_pct = prob.get("L2-Emergent", 0.0) * 100
-            l3_pct = prob.get("L3-Urgent/LessUrgent", 0.0) * 100
-            st.markdown(f"""
-            <div class="confidence-section">
-                <div class="confidence-title">Confidence Breakdown</div>
-                <div class="conf-row">
-                    <div class="conf-labels">
-                        <span class="conf-name critical">Level 1 (Critical)</span>
-                        <span class="conf-pct">{l1_pct:.1f}%</span>
-                    </div>
-                    <div class="conf-track lg">
-                        <div class="conf-fill critical" style="width:{l1_pct}%"></div>
-                    </div>
-                </div>
-                <div class="conf-row">
-                    <div class="conf-labels">
-                        <span class="conf-name muted">Level 2 (Emergent)</span>
-                        <span class="conf-pct muted">{l2_pct:.1f}%</span>
-                    </div>
-                    <div class="conf-track sm">
-                        <div class="conf-fill muted" style="width:{l2_pct}%"></div>
-                    </div>
-                </div>
-                <div class="conf-row">
-                    <div class="conf-labels">
-                        <span class="conf-name muted">Level 3 (Urgent)</span>
-                        <span class="conf-pct muted">{l3_pct:.1f}%</span>
-                    </div>
-                    <div class="conf-track sm">
-                        <div class="conf-fill faint" style="width:max(1%,{l3_pct}%)"></div>
-                    </div>
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
-
-        with c_right:
-            drivers_items = []
-            for d in drivers:
-                bg_cls = "critical-bg" if d["critical"] else "normal-bg"
-                icon_cls = "critical" if d["critical"] else "primary"
-                title_cls = "critical" if d["critical"] else "normal"
-                drivers_items.append(
-                    f'<div class="driver-item {bg_cls}">'
-                    f'<span class="driver-icon {icon_cls}">{d["icon"]}</span>'
-                    f'<div>'
-                    f'<div class="driver-title {title_cls}">{d["title"]}</div>'
-                    f'<div class="driver-detail">{d["detail"]}</div>'
-                    f'</div></div>'
-                )
-            drivers_html = "".join(drivers_items) if drivers_items else (
-                "<p style='color:var(--on-surface-variant);font-size:13px;'>"
-                "No SHAP feature data available.</p>"
-            )
-            st.markdown(
-                f'<div class="drivers-section">'
-                f'<div class="confidence-title">Clinical Drivers</div>'
-                f'{drivers_html}'
-                f'</div>',
-                unsafe_allow_html=True,
-            )
-
-    with right_col:
-        # Patient mini-profile derived from submitted form_data
-        first_name = form_data.get("first_name", "").strip()
-        last_name = form_data.get("last_name", "").strip()
-        if first_name or last_name:
-            patient_name = f"{first_name} {last_name}".strip()
-        else:
-            patient_name = "Current Patient"
-        st.markdown(f"""
-        <div class="patient-card">
-            <div class="patient-header">
-                <div class="patient-avatar">&#128100;</div>
-                <div>
-                    <div class="patient-name">{patient_name}</div>
-                    <div class="patient-meta">{age_display} &bull; Submitted {datetime.now(timezone.utc).strftime("%H:%M UTC")}</div>
-                </div>
-            </div>
-            <div class="vitals-grid">
-                <div class="vital-display">
-                    <div class="vital-display-label">Heart Rate</div>
-                    <span class="vital-display-value">{hr_display}</span>
-                    <span class="vital-display-unit">BPM</span>
-                    <span class="vital-heart-icon">&#9829;</span>
-                </div>
-                <div class="vital-display">
-                    <div class="vital-display-label">BP (Sys/Dia)</div>
-                    <span class="vital-display-value">{bp_display}</span>
-                    <span class="vital-display-unit">mmHg</span>
-                </div>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
-
-        # Protocol recommendations — derived from predicted_label
-        rec_items = []
-        for r in recommendations:
-            rec_items.append(
-                f'<div class="rec-item">'
-                f'<div class="rec-check">\u2713</div>'
-                f'<div class="rec-text">{r}</div>'
-                f'</div>'
-            )
-        recs_html = "".join(rec_items)
-        st.markdown(
-            f'<div class="rec-section">'
-            f'<div class="rec-title">Protocol Recommendations</div>'
-            f'{recs_html}'
-            f'</div>',
-            unsafe_allow_html=True,
-        )
-
-        # Action buttons
-        if st.button("Confirm and Record Triage", type="primary",
-                     use_container_width=True, key="confirm_btn"):
-            pass  # History already appended on submit
-
-        if st.button("Triage Another Patient", use_container_width=True,
-                     key="restart_btn"):
-            # Clear form/result data but keep triage_history
+    hdr_col, btn_col = st.columns([10, 2])
+    with hdr_col:
+        st.write(f"👤 **{patient_name}{age_str}**")
+        st.caption(notes_preview + ("..." if len(form_data.get("triage_notes", "")) > 120 else ""))
+    with btn_col:
+        if st.button("Triage Next Patient", type="primary", use_container_width=True, key="new_patient_btn"):
             for key in ["triage_notes", "age", "heart_rate", "resp_rate",
                         "sbp", "dbp", "spo2", "temp_f", "pain",
-                        "arrival_transport", "form_data", "triage_result"]:
+                        "arrival_transport", "form_data", "triage_result", "is_loading"]:
                 if key in st.session_state:
                     del st.session_state[key]
             st.session_state.page = "intake"
             st.rerun()
 
-    # Footer — show actual model_used from backend response
-    now_utc = datetime.now(timezone.utc).strftime("%H:%M:%S UTC")
+    # ── Triage decision card ──────────────────────────────────────
+    upgraded_html = f"""<div style="margin-top:10px;font-size:13px;color:{meta['color']};
+        background:{meta['badge_bg']};border-radius:8px;padding:10px 14px;">
+        ↑ <strong>Upgraded from initial assessment</strong> — clinical review flagged higher urgency
+    </div>""" if was_upgraded else ""
+
+    safety_html = f"""<div style="margin-top:10px;font-size:13px;color:#7c2d12;
+        background:#fff7ed;border:1px solid #fdba74;border-radius:8px;padding:10px 14px;">
+        ⚠️ <strong>Safety Alert:</strong> {safety_reason}
+    </div>""" if (safety_flag and safety_reason) else ""
+
     st.markdown(f"""
-    <div class="footer-bar">
-        <div class="footer-left">
-            <span><span class="status-dot"></span> AI Engine Online</span>
-            <span>Model: {model_used}</span>
+    <div style="background:{meta['bg']};border:1px solid {meta['border']};
+                border-left:6px solid {meta['color']};border-radius:12px;
+                padding:24px 28px;margin:16px 0;">
+        <div style="display:flex;align-items:flex-start;gap:16px;">
+            <div style="font-size:36px;line-height:1;">{meta['icon']}</div>
+            <div style="flex:1;">
+                <div style="font-size:11px;font-weight:700;text-transform:uppercase;
+                            letter-spacing:1.5px;color:{meta['color']};margin-bottom:4px;">
+                    Triage Priority
+                </div>
+                <div style="font-size:28px;font-weight:900;color:{meta['color']};
+                            letter-spacing:-0.5px;line-height:1.1;margin-bottom:8px;">
+                    {meta['title']}
+                </div>
+                <div style="font-size:14px;font-weight:600;color:{meta['color']};">
+                    {meta['action']}
+                </div>
+            </div>
         </div>
-        <span>Last Sync: {now_utc}</span>
     </div>
+    {upgraded_html}
+    {safety_html}
+    <div id="results-anchor"></div>
     """, unsafe_allow_html=True)
+    # Force Streamlit out of the HTML context with a widget
+    st.empty()
+
+    # ── Clinical reasoning ────────────────────────────────────────
+    if clinical_rationale:
+        st.divider()
+        st.subheader("Clinical Reasoning")
+        st.write(clinical_rationale)
+
+    # ── Key factors + Similar cases side by side ─────────────────
+    st.divider()
+    left_col, right_col = st.columns(2)
+
+    with left_col:
+        st.subheader("Key Factors")
+        if top_features:
+            rows = ""
+            for f in top_features:
+                name = FEATURE_DISPLAY_NAMES.get(f.get("feature", ""), f.get("feature", "").replace("_", " ").title())
+                is_against = "away" in f.get("direction", "")
+                tag_color = "#b91c1c" if is_against else "#15803d"
+                tag_bg    = "#fee2e2" if is_against else "#dcfce7"
+                tag_text  = "⬆ Working against" if is_against else "⬇ Supporting"
+                rows += f"""<tr style="border-bottom:1px solid #f1f5f9;">
+                    <td style="padding:8px 4px;font-weight:600;font-size:13px;color:#0f172a;">{name}</td>
+                    <td style="padding:8px 4px;">
+                        <span style="background:{tag_bg};color:{tag_color};font-size:11px;
+                                     font-weight:600;padding:2px 8px;border-radius:4px;">{tag_text}</span>
+                    </td>
+                </tr>"""
+            st.markdown(f'<table style="width:100%;border-collapse:collapse;">{rows}</table>', unsafe_allow_html=True)
+            st.empty()
+        else:
+            st.caption("No key factors available.")
+
+    with right_col:
+        st.subheader("Similar Past Cases")
+        if not similar_cases:
+            st.caption("No similar cases retrieved.")
+        else:
+            URGENCY_LABEL = {1: "Critical", 2: "Emergent", 3: "Urgent"}
+            URGENCY_COLOR = {1: "#b91c1c", 2: "#c2410c", 3: "#a16207"}
+            URGENCY_BG    = {1: "#fee2e2", 2: "#ffedd5", 3: "#fef9c3"}
+            rows = ""
+            for c in similar_cases:
+                esi           = c.get("triage_level")
+                urgency_label = URGENCY_LABEL.get(esi, "Unknown")
+                urg_color     = URGENCY_COLOR.get(esi, "#64748b")
+                urg_bg        = URGENCY_BG.get(esi, "#f1f5f9")
+                outcome       = (c.get("outcome") or "—").title()
+                complaint     = (c.get("chief_complaint") or "—").title()
+                diagnosis     = (c.get("diagnosis") or "—").title()
+                similarity    = c.get("similarity")
+                sim_str       = f" · {int(similarity * 100)}% match" if similarity is not None else ""
+                vitals_parts  = []
+                if c.get("heart_rate"): vitals_parts.append(f"HR {c['heart_rate']}")
+                if c.get("sbp"):        vitals_parts.append(f"SBP {c['sbp']}")
+                if c.get("spo2"):       vitals_parts.append(f"SpO₂ {c['spo2']}%")
+                vitals_str = "  ·  ".join(vitals_parts)
+                patient_info = (c.get("patient_info") or "").replace("Gender: ", "").replace("Race: ", "").replace("Age: ", "")
+                rows += f"""<tr style="border-bottom:1px solid #f1f5f9;">
+                    <td style="padding:8px 4px;">
+                        <div style="font-weight:600;font-size:13px;color:#0f172a;">{complaint}</div>
+                        <div style="font-size:11px;color:#475569;margin-top:2px;">{patient_info}</div>
+                        <div style="font-size:11px;color:#64748b;margin-top:2px;">{diagnosis}{sim_str}</div>
+                        <div style="font-size:11px;color:#94a3b8;margin-top:2px;">{vitals_str}</div>
+                    </td>
+                    <td style="padding:8px 4px;white-space:nowrap;">
+                        <span style="background:{urg_bg};color:{urg_color};font-size:11px;
+                                     font-weight:700;padding:2px 8px;border-radius:4px;">ESI {esi} — {urgency_label}</span>
+                        <div style="font-size:11px;color:#94a3b8;margin-top:4px;">{outcome}</div>
+                    </td>
+                </tr>"""
+            st.markdown(f'<table style="width:100%;border-collapse:collapse;">{rows}</table>', unsafe_allow_html=True)
+            st.empty()
+
+    # ── Technical info card ───────────────────────────────────────────────────
+    LLM_ESI_LABEL_MAP = {
+        1: "ESI 1 — Critical",
+        2: "ESI 2 — Emergent",
+        3: "ESI 3 — Urgent/Less Urgent",
+    }
+
+    model_label    = triage_result.get("predicted_label", "—")
+    model_conf     = triage_result.get("confidence_pct")
+    model_conf_str = f"{model_conf}% confidence" if model_conf is not None else ""
+    llm_esi        = triage_result.get("llm_esi")
+    llm_label      = LLM_ESI_LABEL_MAP.get(llm_esi, "—")
+    reconciled     = triage_result.get("reconciled_label") or "—"
+    llm_agreement  = triage_result.get("llm_agreement")
+    agreement_str  = "Agreement" if llm_agreement else "Override"
+
+    st.divider()
+    st.subheader("Technical Details")
+    t1, t2, t3 = st.columns(3)
+    with t1:
+        st.caption("arch4 Model")
+        st.write(f"**{model_label}**")
+        if model_conf_str:
+            st.caption(model_conf_str)
+    with t2:
+        st.caption("LLM Independent")
+        st.write(f"**{llm_label}**")
+        st.caption(agreement_str)
+    with t3:
+        st.caption("Reconciled Result")
+        st.write(f"**{reconciled}**")
 
 
 # ── Main ──────────────────────────────────────────────────────────────────────
@@ -1272,7 +1417,6 @@ def main():
         st.session_state.triage_history = []
 
     inject_css()
-    render_sidebar()
 
     if st.session_state.page == "intake":
         render_intake_page()
