@@ -394,26 +394,36 @@ def inject_css():
 
     /* ── Input field overrides ─────────────────────────────────── */
     [data-testid="stNumberInput"] input,
-    [data-testid="stTextArea"] textarea,
-    [data-testid="stSelectbox"] [data-baseweb="select"] {
-        background: var(--surface-container-lowest) !important;
-        border: none !important;
+    [data-testid="stTextInput"] input,
+    [data-testid="stTextArea"] textarea {
+        background: #f8fafc !important;
+        border: 1px solid #dde3ed !important;
         border-radius: 8px !important;
-        font-weight: 700 !important;
+        font-weight: 500 !important;
+        font-size: 14px !important;
         color: var(--on-surface) !important;
         font-family: 'Inter', sans-serif !important;
+        padding: 10px 14px !important;
+    }
+    [data-testid="stNumberInput"] input:focus,
+    [data-testid="stTextInput"] input:focus,
+    [data-testid="stTextArea"] textarea:focus {
+        border-color: var(--primary) !important;
+        box-shadow: 0 0 0 3px rgba(0,71,141,0.08) !important;
+        background: #fff !important;
     }
     [data-testid="stTextArea"] textarea {
-        background: var(--surface-container-low) !important;
+        font-size: 14px !important;
         font-weight: 400 !important;
-        font-size: 16px !important;
         line-height: 1.7 !important;
+        resize: none !important;
     }
-    [data-testid="stTextArea"] textarea:focus {
-        box-shadow: 0 0 0 2px var(--primary-fixed) !important;
-    }
-    [data-testid="stNumberInput"] input:focus {
-        box-shadow: 0 0 0 2px var(--primary-fixed) !important;
+    [data-testid="stSelectbox"] [data-baseweb="select"] > div {
+        background: #f8fafc !important;
+        border: 1px solid #dde3ed !important;
+        border-radius: 8px !important;
+        font-size: 14px !important;
+        color: var(--on-surface) !important;
     }
 
     /* hide default streamlit labels — we use custom HTML labels */
@@ -431,6 +441,30 @@ def inject_css():
     [data-testid="stSlider"] [data-testid="stTickBarMin"],
     [data-testid="stSlider"] [data-testid="stTickBarMax"] {
         display: none !important;
+    }
+
+    /* ── Intake form card ──────────────────────────────────────── */
+    .intake-card {
+        background: #ffffff;
+        border-radius: 16px;
+        border: 1px solid #e2e8f0;
+        box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+        padding: 32px 36px;
+        margin-bottom: 24px;
+    }
+    .intake-section-title {
+        font-size: 11px; font-weight: 700;
+        text-transform: uppercase; letter-spacing: 1.5px;
+        color: var(--on-surface-variant);
+        margin-bottom: 16px; margin-top: 24px;
+        padding-bottom: 8px;
+        border-bottom: 1px solid #f1f5f9;
+    }
+    .intake-section-title:first-child { margin-top: 0; }
+    .field-label {
+        font-size: 12px; font-weight: 600;
+        color: #475569; margin-bottom: 4px;
+        letter-spacing: 0.2px;
     }
 
     /* ── Results page styles ───────────────────────────────────── */
@@ -729,12 +763,11 @@ def inject_css():
         margin-right: 6px;
     }
 
-    /* ── Streamlit number input hide steppers for cleaner look ── */
-    [data-testid="stNumberInput"] button {
-        display: none !important;
-    }
+    /* Hide number input steppers */
+    [data-testid="stNumberInput"] button { display: none !important; }
+    [data-testid="stNumberInput"] > div { gap: 0 !important; }
 
-    /* Make text area label hidden since we use custom */
+    /* Hide text area label */
     [data-testid="stTextArea"] label { display: none !important; }
 
     /* ── Force sidebar to always be visible ────────────────────── */
@@ -850,7 +883,6 @@ def render_sidebar():
 # ── Page 1: Intake form ──────────────────────────────────────────────────────
 
 def render_intake_page():
-    # Top header bar
     st.markdown("""
     <div class="top-header">
         <div class="top-header-left">
@@ -859,7 +891,6 @@ def render_intake_page():
             <span class="page-title">New Patient Entry</span>
         </div>
         <div class="top-header-right">
-            <span class="search-box">&#128269; &nbsp;Search Patients...</span>
             <span class="header-icon">&#128276;</span>
             <span class="header-icon">&#9881;</span>
             <div class="avatar">&#128100;</div>
@@ -867,157 +898,71 @@ def render_intake_page():
     </div>
     """, unsafe_allow_html=True)
 
-    # Two-column layout
-    left_col, right_col = st.columns([3, 2], gap="large")
+    # ── Patient Info ─────────────────────────────────────────────
+    st.markdown('<div class="intake-section-title">Patient Information</div>', unsafe_allow_html=True)
+    c1, c2, c3 = st.columns([2, 2, 1])
+    with c1:
+        st.markdown('<div class="field-label">First Name</div>', unsafe_allow_html=True)
+        st.text_input("First Name", key="first_name", placeholder="Jane", label_visibility="collapsed")
+    with c2:
+        st.markdown('<div class="field-label">Last Name</div>', unsafe_allow_html=True)
+        st.text_input("Last Name", key="last_name", placeholder="Smith", label_visibility="collapsed")
+    with c3:
+        st.markdown('<div class="field-label">Age</div>', unsafe_allow_html=True)
+        st.number_input("Age", min_value=0, max_value=120, value=None, key="age",
+                        placeholder="—", label_visibility="collapsed")
 
-    with left_col:
-        # Primary Documentation card
-        st.markdown("""
-        <div class="card" style="min-height: 580px; display: flex; flex-direction: column;">
-            <div style="display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 20px;">
-                <div>
-                    <div class="section-label primary">Primary Documentation</div>
-                    <div class="section-title" style="margin-bottom: 0;">Triage Notes</div>
-                </div>
-                <div class="badge-row">
-                    <span class="badge">Voice Enabled</span>
-                    <span class="badge">Autosave Active</span>
-                </div>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
+    # ── Triage Notes ─────────────────────────────────────────────
+    st.markdown('<div class="intake-section-title">Triage Notes</div>', unsafe_allow_html=True)
+    st.text_area(
+        "Triage Notes", height=160, key="triage_notes",
+        placeholder="Chief complaint, symptoms, relevant history...",
+        label_visibility="collapsed",
+    )
 
-        # Overlay the text area on top of the card using negative margin
-        st.markdown("<div style='margin-top:-520px; padding: 0 32px 32px;'>",
-                    unsafe_allow_html=True)
-        st.text_area(
-            "Triage Notes",
-            height=450,
-            key="triage_notes",
-            placeholder="Enter chief complaint, detailed symptoms, and medical history here...",
-            label_visibility="collapsed",
-        )
-        st.markdown("</div>", unsafe_allow_html=True)
+    # ── Vitals ───────────────────────────────────────────────────
+    st.markdown('<div class="intake-section-title">Vitals</div>', unsafe_allow_html=True)
+    v1, v2, v3, v4, v5, v6 = st.columns(6)
+    with v1:
+        st.markdown('<div class="field-label">Heart Rate</div>', unsafe_allow_html=True)
+        st.number_input("HR", min_value=20, max_value=250, value=None, key="heart_rate",
+                        placeholder="BPM", label_visibility="collapsed")
+    with v2:
+        st.markdown('<div class="field-label">Resp Rate</div>', unsafe_allow_html=True)
+        st.number_input("RR", min_value=4, max_value=60, value=None, key="resp_rate",
+                        placeholder="br/m", label_visibility="collapsed")
+    with v3:
+        st.markdown('<div class="field-label">SBP</div>', unsafe_allow_html=True)
+        st.number_input("SBP", min_value=40, max_value=300, value=None, key="sbp",
+                        placeholder="mmHg", label_visibility="collapsed")
+    with v4:
+        st.markdown('<div class="field-label">DBP</div>', unsafe_allow_html=True)
+        st.number_input("DBP", min_value=10, max_value=200, value=None, key="dbp",
+                        placeholder="mmHg", label_visibility="collapsed")
+    with v5:
+        st.markdown('<div class="field-label">SpO2</div>', unsafe_allow_html=True)
+        st.number_input("SpO2", min_value=50, max_value=100, value=None, key="spo2",
+                        placeholder="%", label_visibility="collapsed")
+    with v6:
+        st.markdown('<div class="field-label">Temp (°F)</div>', unsafe_allow_html=True)
+        st.number_input("Temp", min_value=85.0, max_value=115.0, value=None, key="temp_f",
+                        placeholder="°F", step=0.1, label_visibility="collapsed")
 
-    with right_col:
-        # Vitals panel
-        st.markdown("""
-        <div class="section-label secondary">Diagnostic Layer</div>
-        <div class="section-title">Optional Vitals</div>
-        """, unsafe_allow_html=True)
-
-        # First Name | Last Name
-        n1, n2 = st.columns(2)
-        with n1:
-            st.markdown('<div class="vital-label">First Name</div>', unsafe_allow_html=True)
-            st.text_input("First Name", key="first_name", placeholder="Jane",
-                          label_visibility="collapsed")
-        with n2:
-            st.markdown('<div class="vital-label">Last Name</div>', unsafe_allow_html=True)
-            st.text_input("Last Name", key="last_name", placeholder="Smith",
-                          label_visibility="collapsed")
-
-        # Age — full width
-        st.markdown('<div class="vital-label">Age</div>', unsafe_allow_html=True)
-        st.number_input("Age", min_value=0, max_value=120, value=None,
-                        key="age", placeholder="Years", label_visibility="collapsed")
-
-        # Heart Rate | RR
-        v1, v2 = st.columns(2)
-        with v1:
-            st.markdown('<div class="vital-label">Heart Rate (BPM)</div>',
-                        unsafe_allow_html=True)
-            st.number_input("Heart Rate", min_value=20, max_value=250,
-                            value=None, key="heart_rate", placeholder="72",
-                            label_visibility="collapsed")
-        with v2:
-            st.markdown('<div class="vital-label">RR (Breaths/m)</div>',
-                        unsafe_allow_html=True)
-            st.number_input("RR", min_value=4, max_value=60, value=None,
-                            key="resp_rate", placeholder="16",
-                            label_visibility="collapsed")
-
-        # SBP | DBP
-        v3, v4 = st.columns(2)
-        with v3:
-            st.markdown('<div class="vital-label">SBP (mmHg)</div>',
-                        unsafe_allow_html=True)
-            st.number_input("SBP", min_value=40, max_value=300, value=None,
-                            key="sbp", placeholder="120",
-                            label_visibility="collapsed")
-        with v4:
-            st.markdown('<div class="vital-label">DBP (mmHg)</div>',
-                        unsafe_allow_html=True)
-            st.number_input("DBP", min_value=10, max_value=200, value=None,
-                            key="dbp", placeholder="80",
-                            label_visibility="collapsed")
-
-        # SpO2 | Temp
-        v5, v6 = st.columns(2)
-        with v5:
-            st.markdown('<div class="vital-label">SpO2 (%)</div>',
-                        unsafe_allow_html=True)
-            st.number_input("SpO2", min_value=50, max_value=100, value=None,
-                            key="spo2", placeholder="98",
-                            label_visibility="collapsed")
-        with v6:
-            st.markdown('<div class="vital-label">Temp (F)</div>',
-                        unsafe_allow_html=True)
-            st.number_input("Temp", min_value=85.0, max_value=115.0,
-                            value=None, key="temp_f", placeholder="98.6",
-                            step=0.1, label_visibility="collapsed")
-
-        # Pain slider
+    # ── Pain + Transport ─────────────────────────────────────────
+    st.markdown('<div class="intake-section-title">Assessment</div>', unsafe_allow_html=True)
+    p_col, t_col = st.columns([3, 1])
+    with p_col:
         pain_val = st.session_state.get("pain", 4)
-        st.markdown(f"""
-        <div class="pain-header">
-            <span class="pain-label">Pain Level (0-10)</span>
-            <span class="pain-value">{pain_val} / 10</span>
-        </div>
-        """, unsafe_allow_html=True)
-        st.slider("Pain", min_value=0, max_value=10, value=4,
-                  key="pain", label_visibility="collapsed")
-        st.markdown("""
-        <div class="pain-range">
-            <span>None</span>
-            <span>Severe</span>
-        </div>
-        """, unsafe_allow_html=True)
+        st.markdown(f'<div class="field-label">Pain Level &nbsp;<span style="color:var(--primary);font-weight:700;">{pain_val} / 10</span></div>', unsafe_allow_html=True)
+        st.slider("Pain", min_value=0, max_value=10, value=4, key="pain", label_visibility="collapsed")
+    with t_col:
+        st.markdown('<div class="field-label">Arrival Transport</div>', unsafe_allow_html=True)
+        st.selectbox("Transport", TRANSPORT_OPTIONS, key="arrival_transport", label_visibility="collapsed")
 
-        # Arrival transport
-        st.markdown('<div class="vital-label" style="margin-top:12px;">Arrival Transport</div>',
-                    unsafe_allow_html=True)
-        st.selectbox("Transport", TRANSPORT_OPTIONS, key="arrival_transport",
-                     label_visibility="collapsed")
-
-        # System monitoring indicator
-        st.markdown("""
-        <div class="monitor-card">
-            <div class="pulse-ring">
-                <span class="pulse-icon">&#9764;</span>
-            </div>
-            <div>
-                <div class="monitor-label">System Monitoring</div>
-                <div class="monitor-status">Ready for diagnostic stream</div>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
-
-        # Tip card
-        st.markdown("""
-        <div class="tip-card">
-            <div class="tip-icon-box">&#128161;</div>
-            <div>
-                <div class="tip-title">Did you know?</div>
-                <div class="tip-text">Type 'HX' to quickly import patient's known clinical history.</div>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
-
-    # Submit button — centered
-    _l, center, _r = st.columns([1, 2, 1])
+    # Submit button
+    _l, center, _r = st.columns([2, 3, 2])
     with center:
-        if st.button("&#10004;  Complete Triage Assessment", type="primary",
+        if st.button("Run Triage Assessment", type="primary",
                      use_container_width=True, key="submit_btn"):
             form_data = {
                 "first_name": st.session_state.get("first_name", ""),
