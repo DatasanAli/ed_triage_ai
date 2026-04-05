@@ -529,7 +529,7 @@ def synthesize_node(state: TriageState) -> dict:
         raw_level = m.get("triage_level")
         clean_cases.append({
             "case_id":         c.get("case_id", "unknown"),
-            "similarity":      round(c.get("score", 0.0), 2),
+            "similarity":      round(c.get("score", 0.0), 4),
             # Cast to int so Streamlit dataframes show "2" not "2.0"
             "triage_level":    int(raw_level) if raw_level is not None else None,
             "patient_info":    m.get("patient_info"),

@@ -964,22 +964,81 @@ def render_intake_page():
         st.markdown(f"👤 **{name}{age_str}**")
         st.caption(notes + ("..." if len(fd.get("triage_notes", "")) > 120 else ""))
     else:
-        # ── Dev shortcut ─────────────────────────────────────────
-        if st.button("🧪 Fill Test Patient (Dorothy)", key="fill_test"):
-            st.session_state.first_name = "Dorothy"
-            st.session_state.last_name = "Williams"
-            st.session_state.age = 68
-            st.session_state.sex = "Female"
-            st.session_state.triage_notes = "Fever, confusion, and low blood pressure for the past 6 hours"
-            st.session_state.heart_rate = 118
-            st.session_state.resp_rate = 24
-            st.session_state.sbp = 88
-            st.session_state.dbp = 52
-            st.session_state.spo2 = 93
-            st.session_state.temp_f = 101.8
-            st.session_state.pain = 6
-            st.session_state.arrival_transport = "Ambulance"
-            st.rerun()
+        # ── Dev shortcuts ─────────────────────────────────────────
+        TEST_PATIENTS = {
+            "1 · STEMI Suspect (L1)": {
+                "first_name": "James", "last_name": "Patterson", "age": 68, "sex": "Male",
+                "triage_notes": "Crushing chest pain radiating to left arm with diaphoresis and shortness of breath. Patient diaphoretic, pale, and in acute distress.",
+                "heart_rate": 120, "resp_rate": 24, "sbp": 85, "dbp": 55, "spo2": 91, "temp_f": 98.2, "pain": 9,
+                "arrival_transport": "Ambulance",
+            },
+            "2 · Under-triage Trap (L1/L2)": {
+                "first_name": "Robert", "last_name": "Chen", "age": 55, "sex": "Male",
+                "triage_notes": "Chest pain.",
+                "heart_rate": 110, "resp_rate": 22, "sbp": 90, "dbp": 60, "spo2": 94, "temp_f": 98.6, "pain": 8,
+                "arrival_transport": "Ambulance",
+            },
+            "3 · Ankle Sprain (L3)": {
+                "first_name": "Tyler", "last_name": "Brooks", "age": 28, "sex": "Male",
+                "triage_notes": "Twisted ankle playing basketball. Mild swelling, able to partially bear weight.",
+                "heart_rate": 72, "resp_rate": 14, "sbp": 120, "dbp": 78, "spo2": 99, "temp_f": 98.4, "pain": 4,
+                "arrival_transport": "Walk In",
+            },
+            "4 · Appendicitis Suspect (L2)": {
+                "first_name": "Maria", "last_name": "Santos", "age": 35, "sex": "Female",
+                "triage_notes": "Worsening right lower quadrant pain over 12 hours with nausea, vomiting, and low-grade fever.",
+                "heart_rate": 98, "resp_rate": 18, "sbp": 115, "dbp": 72, "spo2": 98, "temp_f": 100.8, "pain": 7,
+                "arrival_transport": "Unknown",
+            },
+            "5 · Sepsis Suspect (L1) — Dorothy": {
+                "first_name": "Dorothy", "last_name": "Williams", "age": 72, "sex": "Female",
+                "triage_notes": "Fever, confusion, and low blood pressure for the past 6 hours. History of recurrent UTIs. Possible urosepsis.",
+                "heart_rate": 118, "resp_rate": 26, "sbp": 88, "dbp": 52, "spo2": 92, "temp_f": 103.1, "pain": 5,
+                "arrival_transport": "Ambulance",
+            },
+            "6 · Acute Stroke (L1)": {
+                "first_name": "Michael", "last_name": "Torres", "age": 61, "sex": "Male",
+                "triage_notes": "Sudden onset left-sided weakness and facial droop. Unable to speak clearly. Onset 40 minutes ago. FAST exam positive.",
+                "heart_rate": 88, "resp_rate": 16, "sbp": 178, "dbp": 105, "spo2": 96, "temp_f": 98.4, "pain": 2,
+                "arrival_transport": "Ambulance",
+            },
+            "7 · Pediatric Fever (L2)": {
+                "first_name": "Liam", "last_name": "Johnson", "age": 3, "sex": "Male",
+                "triage_notes": "High fever and irritability in a 3-year-old. Not eating since yesterday. No rash or neck stiffness.",
+                "heart_rate": 130, "resp_rate": 28, "sbp": 95, "dbp": 60, "spo2": 97, "temp_f": 103.2, "pain": 6,
+                "arrival_transport": "Unknown",
+            },
+            "8 · MVA Poly-trauma (L1)": {
+                "first_name": "David", "last_name": "Kim", "age": 44, "sex": "Male",
+                "triage_notes": "High-speed motor vehicle collision. Severe chest and abdominal pain. Seatbelt sign present. GCS 14.",
+                "heart_rate": 125, "resp_rate": 20, "sbp": 94, "dbp": 64, "spo2": 96, "temp_f": 98.0, "pain": 9,
+                "arrival_transport": "Ambulance",
+            },
+            "9 · Suicidal Ideation (L2)": {
+                "first_name": "Emma", "last_name": "Reeves", "age": 30, "sex": "Female",
+                "triage_notes": "Active suicidal thoughts with hopelessness and severe depression. No specific plan but expressing intent.",
+                "heart_rate": 82, "resp_rate": 14, "sbp": 118, "dbp": 75, "spo2": 99, "temp_f": 98.6, "pain": 0,
+                "arrival_transport": "Walk In",
+            },
+            "10 · Sparse Text Stress Test": {
+                "first_name": "John", "last_name": "Doe", "age": 50, "sex": "Male",
+                "triage_notes": "Pain.",
+                "heart_rate": 104, "resp_rate": 19, "sbp": 135, "dbp": 88, "spo2": 96, "temp_f": 99.1, "pain": 5,
+                "arrival_transport": "Walk In",
+            },
+        }
+
+        tc_col, btn_col = st.columns([3, 1])
+        with tc_col:
+            selected = st.selectbox("🧪 Load test patient", ["— select —"] + list(TEST_PATIENTS.keys()),
+                                    key="test_patient_select", label_visibility="collapsed")
+        with btn_col:
+            if st.button("Load", key="fill_test", disabled=(selected == "— select —")):
+                p = TEST_PATIENTS[selected]
+                for k, v in p.items():
+                    st.session_state[k] = v
+                del st.session_state["test_patient_select"]
+                st.rerun()
 
         # ── Patient Info ─────────────────────────────────────────
         st.markdown('<div class="intake-section-title">Patient Information</div>', unsafe_allow_html=True)
@@ -1242,10 +1301,35 @@ def render_results_page():
     notes_preview = form_data.get("triage_notes", "")[:120]
     age_str      = f", {age_val}y" if age_val else ""
 
+    # Build vitals strip for header
+    VITAL_DEFS = [
+        ("HR",   "heart_rate", "bpm",  lambda v: v > 100 or v < 50),
+        ("RR",   "resp_rate",  "br/m", lambda v: v > 20 or v < 10),
+        ("SBP",  "sbp",        "mmHg", lambda v: v < 90 or v > 160),
+        ("SpO₂", "spo2",       "%",    lambda v: v < 95),
+        ("Temp", "temp_f",     "°F",   lambda v: v > 100.4 or v < 96),
+        ("Pain", "pain",       "/10",  lambda v: v >= 7),
+    ]
+    vitals_html = ""
+    for label, key, unit, is_abnormal in VITAL_DEFS:
+        val = form_data.get(key)
+        if val is not None:
+            abnormal = is_abnormal(val)
+            color  = "#b91c1c" if abnormal else "#475569"
+            weight = "700" if abnormal else "500"
+            vitals_html += (
+                f'<span style="margin-right:16px;font-size:12px;color:{color};font-weight:{weight};">'
+                f'<span style="font-size:10px;color:#94a3b8;font-weight:600;text-transform:uppercase;'
+                f'letter-spacing:0.5px;margin-right:3px;">{label}</span>{val} {unit}</span>'
+            )
+
     hdr_col, btn_col = st.columns([10, 2])
     with hdr_col:
         st.write(f"👤 **{patient_name}{age_str}**")
         st.caption(notes_preview + ("..." if len(form_data.get("triage_notes", "")) > 120 else ""))
+        if vitals_html:
+            st.markdown(f'<div style="margin-top:4px;">{vitals_html}</div>', unsafe_allow_html=True)
+            st.empty()
     with btn_col:
         if st.button("Triage Next Patient", type="primary", use_container_width=True, key="new_patient_btn"):
             for key in ["triage_notes", "age", "heart_rate", "resp_rate",
@@ -1267,6 +1351,24 @@ def render_results_page():
         ⚠️ <strong>Safety Alert:</strong> {safety_reason}
     </div>""" if (safety_flag and safety_reason) else ""
 
+    # ── Build key factor chips ────────────────────────────────────
+    chips_html = ""
+    if top_features:
+        for f in top_features:
+            name = FEATURE_DISPLAY_NAMES.get(f.get("feature", ""), f.get("feature", "").replace("_", " ").title())
+            is_against = "away" in f.get("direction", "")
+            chip_bg     = "#fee2e2" if is_against else "#dcfce7"
+            chip_color  = "#b91c1c" if is_against else "#15803d"
+            chip_border = "#fca5a5" if is_against else "#86efac"
+            arrow       = "↑" if is_against else "↓"
+            chips_html += f"""<span style="display:inline-flex;align-items:center;gap:4px;
+                background:{chip_bg};color:{chip_color};border:1px solid {chip_border};
+                border-radius:20px;padding:4px 12px;font-size:12px;font-weight:700;
+                margin:3px 4px 3px 0;white-space:nowrap;">
+                {arrow} {name}
+            </span>"""
+        chips_html = f'<div style="display:flex;flex-wrap:wrap;margin-top:12px;">{chips_html}</div>'
+
     st.markdown(f"""
     <div style="background:{meta['bg']};border:1px solid {meta['border']};
                 border-left:6px solid {meta['color']};border-radius:12px;
@@ -1285,6 +1387,7 @@ def render_results_page():
                 <div style="font-size:14px;font-weight:600;color:{meta['color']};">
                     {meta['action']}
                 </div>
+                {chips_html}
             </div>
         </div>
     </div>
@@ -1292,40 +1395,16 @@ def render_results_page():
     {safety_html}
     <div id="results-anchor"></div>
     """, unsafe_allow_html=True)
-    # Force Streamlit out of the HTML context with a widget
     st.empty()
 
-    # ── Clinical reasoning ────────────────────────────────────────
-    if clinical_rationale:
-        st.divider()
-        st.subheader("Clinical Reasoning")
-        st.write(clinical_rationale)
-
-    # ── Key factors + Similar cases side by side ─────────────────
+    # ── Clinical reasoning + Similar cases side by side ───────────
     st.divider()
     left_col, right_col = st.columns(2)
 
     with left_col:
-        st.subheader("Key Factors")
-        if top_features:
-            rows = ""
-            for f in top_features:
-                name = FEATURE_DISPLAY_NAMES.get(f.get("feature", ""), f.get("feature", "").replace("_", " ").title())
-                is_against = "away" in f.get("direction", "")
-                tag_color = "#b91c1c" if is_against else "#15803d"
-                tag_bg    = "#fee2e2" if is_against else "#dcfce7"
-                tag_text  = "⬆ Working against" if is_against else "⬇ Supporting"
-                rows += f"""<tr style="border-bottom:1px solid #f1f5f9;">
-                    <td style="padding:8px 4px;font-weight:600;font-size:13px;color:#0f172a;">{name}</td>
-                    <td style="padding:8px 4px;">
-                        <span style="background:{tag_bg};color:{tag_color};font-size:11px;
-                                     font-weight:600;padding:2px 8px;border-radius:4px;">{tag_text}</span>
-                    </td>
-                </tr>"""
-            st.markdown(f'<table style="width:100%;border-collapse:collapse;">{rows}</table>', unsafe_allow_html=True)
-            st.empty()
-        else:
-            st.caption("No key factors available.")
+        if clinical_rationale:
+            st.subheader("Clinical Reasoning")
+            st.write(clinical_rationale)
 
     with right_col:
         st.subheader("Similar Past Cases")
