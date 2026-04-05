@@ -34,6 +34,9 @@ from .prompts import (
 # ── Class index → label (0-based, matches ModelPrediction.LABEL_MAP) ─────────
 _LABEL_MAP = {0: "L1-Critical", 1: "L2-Emergent", 2: "L3-Urgent"}
 
+# Escalation gating: only override model when confidence is below this threshold
+ESCALATION_CONFIDENCE_THRESHOLD = 0.70
+
 # ── Shared LLM client (AWS Bedrock) ───────────────────────────────────────────
 # Auth via IAM role or AWS_PROFILE env var — no API key needed.
 # credentials_profile_name is only passed when AWS_PROFILE is set (local dev);
@@ -177,18 +180,22 @@ def _parse_analyze_response(response_text: str, model_class: int) -> dict:
     }
 
 
-def _reconcile(model_class: int, llm_esi: int | None) -> tuple[int, str]:
+def _reconcile(model_class: int, llm_esi: int | None, confidence: float = 1.0) -> tuple[int, str]:
     """
     Return (reconciled_class, reconciled_label).
 
-    Always takes the more cautious (lower class index = more urgent) of model vs LLM.
+    Escalates to LLM recommendation only when model confidence is below
+    ESCALATION_CONFIDENCE_THRESHOLD (70%). High-confidence model predictions
+    are trusted; low-confidence ones receive LLM scrutiny.
     Falls back to model_class when llm_esi is None.
     """
     if llm_esi is None:
         return model_class, _LABEL_MAP[model_class]
-    llm_class      = llm_esi - 1   # ESI 1→class 0, ESI 2→class 1, ESI 3→class 2
-    reconciled     = min(model_class, llm_class)
-    return reconciled, _LABEL_MAP[reconciled]
+    llm_class = llm_esi - 1   # ESI 1→class 0, ESI 2→class 1, ESI 3→class 2
+    # Only escalate if LLM is more urgent AND model confidence is below threshold
+    if llm_class < model_class and confidence < ESCALATION_CONFIDENCE_THRESHOLD:
+        return llm_class, _LABEL_MAP[llm_class]
+    return model_class, _LABEL_MAP[model_class]
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -451,8 +458,9 @@ def analyze_node(state: TriageState) -> dict:
     # ── Parse structured fields from LLM response ─────────────────────────────
     parsed = _parse_analyze_response(raw_response, model_class)
 
-    # ── Reconcile model vs LLM (always take the more cautious level) ──────────
-    reconciled_class, reconciled_label = _reconcile(model_class, parsed["llm_esi"])
+    # ── Reconcile model vs LLM (escalate only when model confidence < 70%) ────
+    confidence = mo.get("confidence", 1.0)
+    reconciled_class, reconciled_label = _reconcile(model_class, parsed["llm_esi"], confidence)
 
     return {
         "clinical_analysis":   parsed["clinical_analysis"],
