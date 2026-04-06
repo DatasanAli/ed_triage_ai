@@ -19,3 +19,5 @@ venv/
 
 # Data files — share via S3
 data/
+
+results/
