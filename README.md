@@ -133,9 +133,7 @@ See [sagemaker/README.md](sagemaker/README.md) for full pipeline documentation, 
 
 ```
 ed_triage_ai/
-├── run_triage.py                  # End-to-end runner (local or SageMaker)
 ├── requirements.txt               # Project dependencies
-├── comprehensive_test.ipynb       # Full pipeline test across 10 clinical scenarios
 │
 ├── src/
 │   ├── agents/                    # LangGraph triage agent
@@ -144,6 +142,13 @@ ed_triage_ai/
 │   │   ├── state.py               # TriageState TypedDict
 │   │   ├── prompts.py             # LLM prompts (ANALYZE_SYSTEM, ANALYZE_HUMAN)
 │   │   └── __init__.py            # Exports: triage_graph, TriageState
+│   ├── backend/                   # FastAPI service
+│   │   ├── main.py                # /health and /predict routes
+│   │   ├── schemas.py             # TriageRequest + TriageResponse
+│   │   ├── config.py              # pydantic-settings (env vars)
+│   │   └── sagemaker_service.py   # run_triage_inference — pipeline entry point
+│   ├── frontend/                  # Streamlit UI
+│   │   └── app.py                 # Intake form + results page
 │   ├── retreival/
 │   │   └── retrieval.py           # EDTriageRAG — Pinecone retrieval via Titan embeddings
 │   ├── reasoning/
@@ -155,32 +160,39 @@ ed_triage_ai/
 │   ├── steps/                     # Preprocess, train, evaluate, deploy
 │   └── models/arch4/              # BioClinicalBERT + LightGBM implementation
 │
-├── notebooks/                     # Training notebooks per architecture
-└── docs/                          # Design docs and architecture notes
+├── notebooks/                     # arch4 training, EDA, data cleaning, feature engineering,
+│                                  # comprehensive pipeline test
+├── scripts/                       # run_triage.py (CLI runner), eval_e2e_pipeline.py
+├── experimental/                  # Archived architecture explorations (arch1/2/5/6, GatorTron, Llama)
+└── docs/                          # ORCHESTRATION.md and architecture notes
 ```
 
 ---
 
 ## Running the System
 
-### Local
+### CLI (local or SageMaker Studio)
 
 ```bash
-# Set AWS profile (SageMaker uses instance role — no profile needed there)
-export AWS_PROFILE=ed-triage
-export PYTHONPATH=src
+export AWS_PROFILE=ed-triage   # local only — SageMaker uses instance role
+export PYTHONPATH=.
 
-python run_triage.py
+python scripts/run_triage.py
 ```
 
-### SageMaker Studio
+### Backend + Frontend
 
 ```bash
-cd ~/ed_triage_ai
-PYTHONPATH=src python run_triage.py
+# Terminal 1 — Backend
+uvicorn src.backend.main:app --reload --port 8000
+
+# Terminal 2 — Frontend
+streamlit run src/frontend/app.py
 ```
 
-Or run `comprehensive_test.ipynb` for a full evaluation across 10 clinical scenarios (covering ESI 1–3, edge cases, SHAP contradictions, and RAG majority disagreement).
+> Use `src/backend/requirements.txt` for local installs — the root `requirements.txt` includes heavy SageMaker ML packages.
+
+Or open `notebooks/comprehensive_test.ipynb` for a full evaluation across 10 clinical scenarios (covering ESI 1–3, edge cases, SHAP contradictions, and RAG majority disagreement).
 
 ---
 
