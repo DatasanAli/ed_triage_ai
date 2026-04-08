@@ -1,3 +1,5 @@
+> **AI Disclosure**: Portions of this codebase and documentation were developed with the assistance of AI tools (including Claude). All AI-generated content was reviewed and validated by the project authors.
+
 # ED Triage AI
 
 Clinical decision support system for emergency department triage. Combines a deployed ML model, retrieval-augmented generation (RAG) from historical ED cases, and an LLM-based reasoning agent to produce transparent, evidence-grounded triage recommendations.
@@ -41,7 +43,7 @@ Patient Input
      ▼
 [4] synthesize_node
      │  Compares ML prediction vs LLM recommendation
-     │  Reconciles: always take the more urgent (lower ESI) of the two
+     │  Reconciles: escalates to LLM only when model confidence < 70% and LLM is more urgent
      │  Generates escalation flags
      │
      ▼
@@ -56,7 +58,12 @@ The system uses a **two-signal model**:
 
 When signals agree → high confidence. When they disagree → flag for clinical review.
 
-The reconciled triage level always takes the **more urgent** of the two signals — the system errs on the side of safety.
+The reconciled triage level is determined as follows:
+- **High model confidence (≥ 70%)**: model prediction is used regardless of LLM recommendation
+- **Low model confidence (< 70%) + LLM recommends more urgent**: escalate to LLM's recommendation
+- **All other cases**: model prediction is used
+
+The LLM can only escalate acuity, never reduce it — the system errs on the side of caution.
 
 ---
 
@@ -133,9 +140,7 @@ See [sagemaker/README.md](sagemaker/README.md) for full pipeline documentation, 
 
 ```
 ed_triage_ai/
-├── run_triage.py                  # End-to-end runner (local or SageMaker)
 ├── requirements.txt               # Project dependencies
-├── comprehensive_test.ipynb       # Full pipeline test across 10 clinical scenarios
 │
 ├── src/
 │   ├── agents/                    # LangGraph triage agent
@@ -144,6 +149,13 @@ ed_triage_ai/
 │   │   ├── state.py               # TriageState TypedDict
 │   │   ├── prompts.py             # LLM prompts (ANALYZE_SYSTEM, ANALYZE_HUMAN)
 │   │   └── __init__.py            # Exports: triage_graph, TriageState
+│   ├── backend/                   # FastAPI service
+│   │   ├── main.py                # /health and /predict routes
+│   │   ├── schemas.py             # TriageRequest + TriageResponse
+│   │   ├── config.py              # pydantic-settings (env vars)
+│   │   └── sagemaker_service.py   # run_triage_inference — pipeline entry point
+│   ├── frontend/                  # Streamlit UI
+│   │   └── app.py                 # Intake form + results page
 │   ├── retreival/
 │   │   └── retrieval.py           # EDTriageRAG — Pinecone retrieval via Titan embeddings
 │   ├── reasoning/
@@ -155,32 +167,39 @@ ed_triage_ai/
 │   ├── steps/                     # Preprocess, train, evaluate, deploy
 │   └── models/arch4/              # BioClinicalBERT + LightGBM implementation
 │
-├── notebooks/                     # Training notebooks per architecture
-└── docs/                          # Design docs and architecture notes
+├── notebooks/                     # arch4 training, EDA, data cleaning, feature engineering,
+│                                  # comprehensive pipeline test
+├── scripts/                       # run_triage.py (CLI runner), eval_e2e_pipeline.py
+├── experimental/                  # Archived architecture explorations (arch1/2/5/6, GatorTron, Llama)
+└── docs/                          # orchestration.md, arch4 walkthrough, RAG design
 ```
 
 ---
 
 ## Running the System
 
-### Local
+### CLI (local or SageMaker Studio)
 
 ```bash
-# Set AWS profile (SageMaker uses instance role — no profile needed there)
-export AWS_PROFILE=ed-triage
-export PYTHONPATH=src
+export AWS_PROFILE=ed-triage   # local only — SageMaker uses instance role
+export PYTHONPATH=.
 
-python run_triage.py
+python scripts/run_triage.py
 ```
 
-### SageMaker Studio
+### Backend + Frontend
 
 ```bash
-cd ~/ed_triage_ai
-PYTHONPATH=src python run_triage.py
+# Terminal 1 — Backend
+uvicorn src.backend.main:app --reload --port 8000
+
+# Terminal 2 — Frontend
+streamlit run src/frontend/app.py
 ```
 
-Or run `comprehensive_test.ipynb` for a full evaluation across 10 clinical scenarios (covering ESI 1–3, edge cases, SHAP contradictions, and RAG majority disagreement).
+> Use `src/backend/requirements.txt` for local installs — the root `requirements.txt` includes heavy SageMaker ML packages.
+
+Or open `notebooks/comprehensive_test.ipynb` for a full evaluation across 10 clinical scenarios (covering ESI 1–3, edge cases, SHAP contradictions, and RAG majority disagreement).
 
 ---
 
@@ -201,7 +220,7 @@ Pinecone API key is stored in AWS Secrets Manager (`prod/pinecone/api_key`), not
 - **Support, not replace**: The system provides a second opinion with evidence. Clinical judgment always takes precedence.
 - **Hospital-agnostic**: No nursing action items, no ESI timing targets. Each hospital applies its own protocols to the triage recommendation.
 - **Transparency**: Every recommendation includes the features that drove it, similar historical cases, and the LLM's independent reasoning — so clinicians can agree, disagree, or escalate.
-- **Safety-first reconciliation**: When model and LLM disagree, the system takes the more urgent recommendation.
+- **Safety-first reconciliation**: When the model is uncertain (< 70% confidence) and the LLM recommends higher acuity, the system escalates. High-confidence model predictions are trusted; low-confidence ones receive LLM scrutiny.
 
 ---
 

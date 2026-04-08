@@ -5,7 +5,7 @@ Single-file Streamlit app with two views:
   1. Intake form — collects triage notes + optional vitals
   2. Results    — displays triage prediction returned by the FastAPI backend
 
-Run with:  streamlit run frontend/app.py
+Run with:  streamlit run src/frontend/app.py
 """
 
 import streamlit as st
@@ -1200,7 +1200,7 @@ def render_intake_page():
             exc = result_holder["error"]
             if isinstance(exc, requests.exceptions.ConnectionError):
                 st.error(f"Cannot reach the backend at {BACKEND_URL}. "
-                         "Make sure `uvicorn backend.main:app --reload --port 8000` is running.")
+                         "Make sure `uvicorn src.backend.main:app --reload --port 8000` is running.")
             elif isinstance(exc, requests.exceptions.HTTPError):
                 st.error(f"Backend returned an error: {exc.response.status_code} — {exc.response.text}")
             else:
