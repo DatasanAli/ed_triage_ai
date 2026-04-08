@@ -50,7 +50,7 @@
 
 ```text
 ed_triage_ai/
-├── docs/ORCHESTRATION.md         # THIS FILE — single source of truth
+├── docs/orchestration.md         # THIS FILE — single source of truth
 ├── Makefile                      # Endpoint lifecycle commands (deploy / delete)
 ├── src/
 │   ├── backend/                  # FastAPI service

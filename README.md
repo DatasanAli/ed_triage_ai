@@ -164,7 +164,7 @@ ed_triage_ai/
 │                                  # comprehensive pipeline test
 ├── scripts/                       # run_triage.py (CLI runner), eval_e2e_pipeline.py
 ├── experimental/                  # Archived architecture explorations (arch1/2/5/6, GatorTron, Llama)
-└── docs/                          # ORCHESTRATION.md and architecture notes
+└── docs/                          # orchestration.md, arch4 walkthrough, RAG design
 ```
 
 ---
