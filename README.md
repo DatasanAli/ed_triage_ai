@@ -191,7 +191,7 @@ python scripts/run_triage.py
 
 ```bash
 # Terminal 1 — Backend
-uvicorn src.backend.main:app --reload --port 8000
+PYTHONPATH=src uvicorn src.backend.main:app --reload --port 8000
 
 # Terminal 2 — Frontend
 streamlit run src/frontend/app.py
