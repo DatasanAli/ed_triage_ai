@@ -9,8 +9,8 @@
 
 **TriagePulse** is an Emergency Department triage assistant. The system consists of:
 
-1. **Streamlit Frontend** (`frontend/app.py`) — Collects patient demographics, triage notes, and vitals. Displays enriched prediction results including triage priority, clinical reasoning, key SHAP factors, similar historical cases, and a technical details card.
-2. **FastAPI Backend** (`backend/`) — Receives requests from the frontend, runs the full inference pipeline via `run_triage_inference`, and returns an enriched `TriageResponse`.
+1. **Streamlit Frontend** (`src/frontend/app.py`) — Collects patient demographics, triage notes, and vitals. Displays enriched prediction results including triage priority, clinical reasoning, key SHAP factors, similar historical cases, and a technical details card.
+2. **FastAPI Backend** (`src/backend/`) — Receives requests from the frontend, runs the full inference pipeline via `run_triage_inference`, and returns an enriched `TriageResponse`.
 3. **LangGraph Agentic Pipeline** (`src/agents/`) — Orchestrates the full inference pipeline: SageMaker prediction + Pinecone RAG retrieval (parallel) → LLM clinical analysis → reconciliation/synthesis.
 4. **SageMaker Endpoint** (`edtriage-live`) — Hosts the arch4 model (BioClinicalBERT + LightGBM fusion).
 5. **Pinecone RAG** (`src/retreival/`) — Retrieves top-5 similar historical cases using Bedrock Titan embeddings against the `ed-triage-cases` index.
@@ -50,22 +50,23 @@
 
 ```text
 ed_triage_ai/
-├── ORCHESTRATION.md              # THIS FILE — single source of truth
+├── docs/ORCHESTRATION.md         # THIS FILE — single source of truth
 ├── Makefile                      # Endpoint lifecycle commands (deploy / delete)
-├── backend/                      # FastAPI service
-│   ├── main.py                   # /health and /predict routes
-│   ├── schemas.py                # TriageRequest + TriageResponse (enriched)
-│   ├── config.py                 # pydantic-settings (env vars)
-│   └── sagemaker_service.py      # run_triage_inference — pipeline entry point
-├── frontend/                     # Streamlit UI
-│   └── app.py                    # Intake form + results page
-├── src/agents/                   # LangGraph graph + nodes
+├── src/
+│   ├── backend/                  # FastAPI service
+│   │   ├── main.py               # /health and /predict routes
+│   │   ├── schemas.py            # TriageRequest + TriageResponse (enriched)
+│   │   ├── config.py             # pydantic-settings (env vars)
+│   │   └── sagemaker_service.py  # run_triage_inference — pipeline entry point
+│   ├── frontend/                 # Streamlit UI
+│   │   └── app.py                # Intake form + results page
+│   ├── agents/                   # LangGraph graph + nodes
 │   ├── graph.py                  # triage_graph definition
 │   ├── nodes.py                  # predict_node, retrieve_node, analyze_node, synthesize_node
-│   ├── state.py                  # TriageState TypedDict
-│   └── prompts.py                # LLM prompt templates
-├── src/retreival/                # Pinecone RAG
-│   └── retrieval.py              # EDTriageRAG — embed + search + format
+│   │   ├── state.py              # TriageState TypedDict
+│   │   └── prompts.py            # LLM prompt templates
+│   └── retreival/                # Pinecone RAG
+│       └── retrieval.py          # EDTriageRAG — embed + search + format
 └── sagemaker/                    # ML training pipeline (DO NOT MODIFY)
 ```
 
@@ -143,7 +144,7 @@ Accepts triage data from the frontend, runs the full agentic pipeline, returns a
 
 ---
 
-## Backend (`backend/`)
+## Backend (`src/backend/`)
 
 `run_triage_inference(request: TriageRequest)` in `sagemaker_service.py` is the pipeline entry point called by `POST /predict`. It:
 
@@ -183,7 +184,7 @@ reconciled_class = min(model_class, llm_class)  # lower index = higher severity
 
 ---
 
-## Configuration (`backend/config.py`)
+## Configuration (`src/backend/config.py`)
 
 | Env Var                          | Field                     | Default           |
 |----------------------------------|---------------------------|-------------------|
@@ -210,13 +211,13 @@ Run these from the `ed_triage_ai/` directory. Deploy before starting the backend
 
 ```bash
 # Terminal 1 — Backend (from ed_triage_ai/)
-uvicorn backend.main:app --reload --port 8000
+uvicorn src.backend.main:app --reload --port 8000
 
 # Terminal 2 — Frontend (from ed_triage_ai/)
-streamlit run frontend/app.py
+streamlit run src/frontend/app.py
 ```
 
-> **Note:** The root `requirements.txt` is for SageMaker Studio and includes heavy ML packages. Do not `pip install -r requirements.txt` locally — use `backend/requirements.txt` instead.
+> **Note:** The root `requirements.txt` is for SageMaker Studio and includes heavy ML packages. Do not `pip install -r requirements.txt` locally — use `src/backend/requirements.txt` instead.
 
 ---
 
@@ -225,7 +226,7 @@ streamlit run frontend/app.py
 ### Completed
 
 - [x] Create FastAPI backend (`main.py`, `schemas.py`, `config.py`, `sagemaker_service.py`)
-- [x] Build Streamlit frontend (`frontend/app.py`)
+- [x] Build Streamlit frontend (`src/frontend/app.py`)
 - [x] Deploy `edtriage-live` SageMaker endpoint via `repack_and_deploy.py`
 - [x] Integrate backend with live endpoint (`use_mock=False` by default)
 - [x] Refactor `sagemaker_service.py`: extract `invoke_endpoint`, implement `run_triage_inference` as pipeline entry point
