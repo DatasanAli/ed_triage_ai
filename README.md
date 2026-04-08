@@ -1,3 +1,5 @@
+> **AI Disclosure**: Portions of this codebase and documentation were developed with the assistance of AI tools (including Claude). All AI-generated content was reviewed and validated by the project authors.
+
 # ED Triage AI
 
 Clinical decision support system for emergency department triage. Combines a deployed ML model, retrieval-augmented generation (RAG) from historical ED cases, and an LLM-based reasoning agent to produce transparent, evidence-grounded triage recommendations.
@@ -41,7 +43,7 @@ Patient Input
      ▼
 [4] synthesize_node
      │  Compares ML prediction vs LLM recommendation
-     │  Reconciles: always take the more urgent (lower ESI) of the two
+     │  Reconciles: escalates to LLM only when model confidence < 70% and LLM is more urgent
      │  Generates escalation flags
      │
      ▼
@@ -56,7 +58,12 @@ The system uses a **two-signal model**:
 
 When signals agree → high confidence. When they disagree → flag for clinical review.
 
-The reconciled triage level always takes the **more urgent** of the two signals — the system errs on the side of safety.
+The reconciled triage level is determined as follows:
+- **High model confidence (≥ 70%)**: model prediction is used regardless of LLM recommendation
+- **Low model confidence (< 70%) + LLM recommends more urgent**: escalate to LLM's recommendation
+- **All other cases**: model prediction is used
+
+The LLM can only escalate acuity, never reduce it — the system errs on the side of caution.
 
 ---
 
@@ -213,7 +220,7 @@ Pinecone API key is stored in AWS Secrets Manager (`prod/pinecone/api_key`), not
 - **Support, not replace**: The system provides a second opinion with evidence. Clinical judgment always takes precedence.
 - **Hospital-agnostic**: No nursing action items, no ESI timing targets. Each hospital applies its own protocols to the triage recommendation.
 - **Transparency**: Every recommendation includes the features that drove it, similar historical cases, and the LLM's independent reasoning — so clinicians can agree, disagree, or escalate.
-- **Safety-first reconciliation**: When model and LLM disagree, the system takes the more urgent recommendation.
+- **Safety-first reconciliation**: When the model is uncertain (< 70% confidence) and the LLM recommends higher acuity, the system escalates. High-confidence model predictions are trusted; low-confidence ones receive LLM scrutiny.
 
 ---
 
