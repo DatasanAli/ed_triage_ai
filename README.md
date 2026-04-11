@@ -236,7 +236,7 @@ pip install -r src/backend/requirements.txt   # lightweight install for UI/API o
 
 # Set AWS profile (local only — SageMaker uses instance role)
 export AWS_PROFILE=ed-triage
-export PYTHONPATH=.
+export PYTHONPATH=src
 
 # Terminal 1 — Start the API
 uvicorn src.backend.main:app --reload --port 8000

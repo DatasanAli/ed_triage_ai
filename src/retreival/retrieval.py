@@ -109,8 +109,11 @@ class EDTriageRAG:
         """
         Convert patient data dict into the embedding text format.
 
-        This MUST mirror the format used in data_prep.py's build_embedding_text().
-        The patient dict should have these keys (all optional except chief_complaint):
+        This MUST mirror the format used in data_prep.py's build_embedding_text()
+        exactly — same fields, same order, same labels — so index and query
+        vectors are in the same semantic space.
+
+        Fields (all triage-time only):
           - age (int or str)
           - gender (str)
           - race (str)
@@ -121,19 +124,11 @@ class EDTriageRAG:
           - resp_rate (float)
           - temperature (float)
           - spo2 (float)
-          - hpi (str) — history of present illness narrative
-          - past_medical_history (str)
+          - arrival_transport (str) — e.g. "AMBULANCE", "WALK IN"
 
-        Example:
-            patient = {
-                "age": 68,
-                "gender": "Female",
-                "chief_complaint": "chest pain",
-                "heart_rate": 110,
-                "systolic_bp": 135,
-                "diastolic_bp": 85,
-                "spo2": 99,
-            }
+        Not included (post-triage / unavailable at query time):
+          - hpi, past_medical_history — not known at triage; kept in metadata
+            for the LLM to read after retrieval, not used for similarity search
         """
         sections = []
 
@@ -170,15 +165,10 @@ class EDTriageRAG:
         vitals_text = ", ".join(vitals_parts) if vitals_parts else "Vitals not recorded."
         sections.append(f"VITALS: {vitals_text}")
 
-        # HPI narrative
-        hpi = patient.get("hpi", "")
-        if hpi:
-            sections.append(f"HISTORY: {hpi[:500]}")
-
-        # Past medical history
-        pmh = patient.get("past_medical_history", "")
-        if pmh:
-            sections.append(f"PAST MEDICAL HISTORY: {pmh[:300]}")
+        # Arrival transport — mirrors data_prep.py
+        arrival = patient.get("arrival_transport", "")
+        if arrival:
+            sections.append(f"ARRIVAL: {arrival}")
 
         return "\n".join(sections)
 

@@ -25,6 +25,7 @@ import json
 import re
 import pandas as pd
 from pathlib import Path
+from sklearn.model_selection import train_test_split
 
 # ---------------------------------------------------------------------------
 # Paths
@@ -119,30 +120,25 @@ def build_embedding_text(row: pd.Series) -> str:
     """
     Build the text we will send to Bedrock Titan for embedding.
 
-    IMPORTANT — only triage-time data is included here.
+    IMPORTANT — only triage-time data is included here, and this format
+    must exactly mirror build_query_text() in retrieval.py so that index
+    vectors and query vectors are in the same semantic space.
 
-    Research basis (JMIR 2026 - Multi-Evidence Clinical Reasoning RAG for ED Triage):
-    Embeddings should only use information available at the moment of triage.
-    Including post-triage data (HPI, diagnosis, PMH, disposition) causes
-    spurious similarity — two unrelated patients match because they share
-    common comorbidities or similar discharge note language, not because
-    their presentations were clinically similar.
-
-    What a triage nurse knows at triage time:
-      ✅ Chief complaint (why did you come in?)
-      ✅ Vitals (measured on arrival)
+    Fields included (all available at triage time):
+      ✅ Chief complaint
       ✅ Demographics (age, gender — from registration)
-      ✅ ESI level (assigned during triage)
+      ✅ Vitals (measured on arrival)
       ✅ Arrival transport (ambulance vs walk-in — observable)
 
-    What is NOT yet known at triage time:
-      ❌ HPI — comes from physician interview later
-      ❌ Diagnosis — determined after workup
-      ❌ Disposition — decided after treatment
-      ❌ PMH — often unknown or unverified at triage
-
-    Diagnosis and disposition are kept in metadata (for the LLM to use
-    when explaining retrieved cases) but NOT in the embedding text.
+    Fields excluded:
+      ❌ ESI triage level — this is the prediction target; including it
+         would create spurious similarity between cases that share a label
+         but have very different presentations, and it is unknown for
+         new patients at query time
+      ❌ HPI — comes from physician interview after triage; not available
+         at query time, so including it in the index would create a
+         systematic mismatch between index and query vectors
+      ❌ Diagnosis, disposition, PMH — all post-encounter fields
     """
     sections = []
 
@@ -154,9 +150,6 @@ def build_embedding_text(row: pd.Series) -> str:
     # Chief complaint — the single most important triage signal
     cc = clean_text(row["chiefcomplaint"])
     sections.append(f"CHIEF COMPLAINT: {cc if cc else 'Not recorded'}")
-
-    # ESI triage level — assigned by the triage nurse
-    sections.append(f"ESI TRIAGE LEVEL: {int(row['triage'])}")
 
     # Vitals — measured on arrival, core triage data
     vitals = parse_vitals(clean_text(row["initial_vitals"]))
@@ -226,6 +219,18 @@ def main():
     df = df.merge(df_pmh, on="stay_id", how="left")
     print(f"  After join: {len(df)} rows")
 
+    # Reproduce the same 80/10/10 stratified split used in training (SEED=42)
+    # so the RAG index contains only training + validation records.
+    # Test records are excluded to prevent self-match contamination during evaluation.
+    df_valid = df.dropna(subset=["triage", "chiefcomplaint"]).copy()
+    y = df_valid["triage"].astype(int).values
+    idx_trainval, idx_test = train_test_split(
+        range(len(df_valid)), test_size=0.10, stratify=y, random_state=42
+    )
+    trainval_stay_ids = set(df_valid.iloc[idx_trainval]["stay_id"].tolist())
+    df = df[df["stay_id"].isin(trainval_stay_ids)].copy()
+    print(f"  After excluding test split: {len(df)} rows (train+val only)")
+
     # Counters for the stats report
     stats = {
         "total_rows": len(df),
@@ -233,6 +238,7 @@ def main():
         "skipped_missing_cc": 0,
         "missing_vitals": int(df["initial_vitals"].isna().sum()),
         "output_cases": 0,
+        "split": "train+val only (test excluded, SEED=42)",
         "triage_distribution": df["triage"].value_counts().sort_index().to_dict(),
     }
 

@@ -10,10 +10,24 @@ Run with:  streamlit run src/frontend/app.py
 
 import streamlit as st
 import requests
+import base64
+import os
 from datetime import datetime, timezone
 
 # ── Backend ───────────────────────────────────────────────────────────────────
 BACKEND_URL = "http://localhost:8000"
+
+# ── Logo ──────────────────────────────────────────────────────────────────────
+_LOGO_PATH = os.path.join(os.path.dirname(__file__), "triage_pulse_final.svg")
+
+def _logo_img_tag(height: int = 80) -> str:
+    """Return an <img> tag with the SVG logo base64-encoded (works in any working dir)."""
+    try:
+        with open(_LOGO_PATH, "rb") as f:
+            b64 = base64.b64encode(f.read()).decode()
+        return f'<img src="data:image/svg+xml;base64,{b64}" height="{height}" style="display:block;">'
+    except FileNotFoundError:
+        return '<span class="brand-name">TriagePulse</span>'
 
 TRANSPORT_OPTIONS = ["Walk In", "Ambulance", "Helicopter", "Unknown"]
 
@@ -87,38 +101,38 @@ def inject_css():
 
     /* ── Design system tokens ──────────────────────────────────── */
     :root {
-        --primary: #00478d;
-        --primary-container: #005eb8;
+        --primary: #1A7A7A;
+        --primary-container: #145f5f;
         --on-primary: #ffffff;
-        --primary-fixed: #d6e3ff;
-        --secondary: #4a6178;
-        --tertiary: #940010;
-        --tertiary-container: #bb1b21;
-        --tertiary-fixed: #ffdad6;
-        --on-surface: #171c22;
-        --on-surface-variant: #424752;
-        --surface: #f8f9ff;
-        --surface-container-low: #f0f4fd;
-        --surface-container: #eaeef7;
-        --surface-container-high: #e4e8f1;
-        --surface-container-highest: #dee3eb;
+        --primary-fixed: #EBF4F4;
+        --secondary: #A8D8D8;
+        --tertiary: #E05A4E;
+        --tertiary-container: #c0463b;
+        --tertiary-fixed: #fde8e6;
+        --on-surface: #2D3748;
+        --on-surface-variant: #4a5568;
+        --surface: #F7FAFA;
+        --surface-container-low: #eef5f5;
+        --surface-container: #e4eeee;
+        --surface-container-high: #d8e8e8;
+        --surface-container-highest: #cce0e0;
         --surface-container-lowest: #ffffff;
-        --outline-variant: #c2c6d4;
-        --error-container: #ffdad6;
-        --on-error-container: #93000a;
+        --outline-variant: #A8D8D8;
+        --error-container: #fde8e6;
+        --on-error-container: #7f1f18;
     }
 
     /* ── Global overrides ──────────────────────────────────────── */
     .stApp, [data-testid="stAppViewContainer"] {
         background-color: var(--surface) !important;
         font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif !important;
-        color: #171c22 !important;
+        color: #2D3748 !important;
     }
 
     /* Ensure all native Streamlit text elements are dark */
     .stApp p:not(button p):not([data-testid="stButton"] p),
     .stApp h1, .stApp h2, .stApp h3, .stApp label {
-        color: #171c22;
+        color: #2D3748;
     }
 
     /* Restore white text on primary buttons */
@@ -163,7 +177,7 @@ def inject_css():
         color: white; font-size: 20px; flex-shrink: 0;
     }
     .sidebar-logo h1 {
-        font-size: 18px; font-weight: 700; color: #0f172a;
+        font-size: 18px; font-weight: 700; color: #2D3748;
         margin: 0; line-height: 1.1;
     }
     .sidebar-logo p {
@@ -181,10 +195,10 @@ def inject_css():
         border-right: 4px solid transparent;
         cursor: default;
     }
-    .nav-item:hover { background: #f1f5f9; color: #0f172a; }
+    .nav-item:hover { background: #f1f5f9; color: #2D3748; }
     .nav-item.active {
-        background: #eff6ff; color: #1d4ed8;
-        border-right-color: #1d4ed8; font-weight: 600;
+        background: #EBF4F4; color: #1A7A7A;
+        border-right-color: #1A7A7A; font-weight: 600;
     }
     .nav-icon { font-size: 18px; width: 24px; text-align: center; }
     .nav-divider {
@@ -219,18 +233,19 @@ def inject_css():
     /* ── Top header bar ────────────────────────────────────────── */
     .top-header {
         display: flex; justify-content: space-between; align-items: center;
-        padding: 16px 0; margin-bottom: 16px;
+        padding: 12px 0; margin-bottom: 16px;
         border-bottom: 1px solid #eaeef7;
+        min-height: 90px;
     }
     .top-header-left {
         display: flex; align-items: center; gap: 16px;
     }
     .brand-name {
-        font-size: 20px; font-weight: 900; color: #1d4ed8;
+        font-size: 20px; font-weight: 900; color: #1A7A7A;
         letter-spacing: -0.5px;
     }
     .header-divider {
-        width: 1px; height: 24px; background: #e2e8f0;
+        width: 1px; height: 56px; background: #e2e8f0;
     }
     .page-title {
         font-size: 16px; font-weight: 700; color: var(--on-surface);
@@ -351,9 +366,9 @@ def inject_css():
         font-family: 'Public Sans', sans-serif;
         font-size: 10px; font-weight: 700;
         text-transform: uppercase; letter-spacing: 0.5px;
-        color: #001b3d;
+        color: #2D3748;
     }
-    .monitor-status { font-size: 12px; color: #00468c; }
+    .monitor-status { font-size: 12px; color: #1A7A7A; }
 
     /* ── Tip card ──────────────────────────────────────────────── */
     .tip-card {
@@ -365,9 +380,9 @@ def inject_css():
     }
     .tip-icon-box {
         width: 44px; height: 44px; border-radius: 8px;
-        background: #cee5ff; display: flex;
+        background: #EBF4F4; display: flex;
         align-items: center; justify-content: center;
-        font-size: 20px; color: #021d31; flex-shrink: 0;
+        font-size: 20px; color: #2D3748; flex-shrink: 0;
     }
     .tip-title { font-size: 12px; font-weight: 700; color: var(--on-surface); }
     .tip-text {
@@ -820,12 +835,12 @@ def inject_css():
     }
     [data-testid="stSidebar"] [data-testid="stButton"] > button:hover {
         background: #f1f5f9 !important;
-        color: #0f172a !important;
+        color: #2D3748 !important;
     }
     [data-testid="stSidebar"] [data-testid="stButton"].nav-active > button {
-        background: #eff6ff !important;
-        color: #1d4ed8 !important;
-        border-right-color: #1d4ed8 !important;
+        background: #EBF4F4 !important;
+        color: #1A7A7A !important;
+        border-right-color: #1A7A7A !important;
         font-weight: 600 !important;
     }
 
@@ -851,7 +866,7 @@ def inject_css():
     .overlay-title {
         font-size: 17px;
         font-weight: 700;
-        color: #0f172a;
+        color: #2D3748;
         margin-bottom: 6px;
     }
     .overlay-subtitle {
@@ -872,7 +887,7 @@ def inject_css():
     .overlay-step-text { font-size: 13px; flex: 1; }
     .step-done   { color: #94a3b8; }
     .step-done .overlay-step-text { text-decoration: line-through; }
-    .step-active { color: #1d4ed8; font-weight: 600; }
+    .step-active { color: #1A7A7A; font-weight: 600; }
     .step-pending { color: #cbd5e1; }
     @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
     .step-active .overlay-step-icon { animation: pulse 1.2s ease-in-out infinite; }
@@ -937,10 +952,10 @@ def render_intake_page():
 
     is_loading = st.session_state.get("is_loading", False)
 
-    st.markdown("""
+    st.markdown(f"""
     <div class="top-header">
         <div class="top-header-left">
-            <span class="brand-name">TriagePulse</span>
+            {_logo_img_tag(80)}
             <div class="header-divider"></div>
             <span class="page-title">New Patient Entry</span>
         </div>
@@ -1227,10 +1242,10 @@ def render_intake_page():
 # ── Page 2: Results ──────────────────────────────────────────────────────────
 
 def render_results_page():
-    st.markdown("""
+    st.markdown(f"""
     <div class="top-header">
         <div class="top-header-left">
-            <span class="brand-name">TriagePulse</span>
+            {_logo_img_tag(80)}
             <div class="header-divider"></div>
             <span class="page-title">Triage Assessment</span>
         </div>
@@ -1268,22 +1283,22 @@ def render_results_page():
     # Nurse-friendly label/colour mapping
     LEVEL_META = {
         "L1-Critical": {
-            "color": "#b91c1c", "bg": "#fef2f2", "border": "#fca5a5",
-            "badge_bg": "#fee2e2", "badge_color": "#991b1b",
+            "color": "#E05A4E", "bg": "#fdf2f1", "border": "#f0a89f",
+            "badge_bg": "#fde8e6", "badge_color": "#7f1f18",
             "title": "ESI 1 — Immediate / Critical",
             "action": "Bring to resuscitation bay immediately. Do not leave unattended.",
             "icon": "🚨",
         },
         "L2-Emergent": {
-            "color": "#c2410c", "bg": "#fff7ed", "border": "#fdba74",
-            "badge_bg": "#ffedd5", "badge_color": "#9a3412",
+            "color": "#b45309", "bg": "#fff7ed", "border": "#fdba74",
+            "badge_bg": "#ffedd5", "badge_color": "#7c3d0a",
             "title": "ESI 2 — Emergent",
             "action": "Assign to monitored bed within 15 minutes. Notify attending.",
             "icon": "⚠️",
         },
         "L3-Urgent": {
-            "color": "#a16207", "bg": "#fefce8", "border": "#fde047",
-            "badge_bg": "#fef9c3", "badge_color": "#854d0e",
+            "color": "#1A7A7A", "bg": "#EBF4F4", "border": "#A8D8D8",
+            "badge_bg": "#d4ecec", "badge_color": "#145f5f",
             "title": "ESI 3 — Urgent / Less Urgent",
             "action": "Place in waiting area. Reassess vitals every 30 minutes.",
             "icon": "🔔",
@@ -1315,7 +1330,7 @@ def render_results_page():
         val = form_data.get(key)
         if val is not None:
             abnormal = is_abnormal(val)
-            color  = "#b91c1c" if abnormal else "#475569"
+            color  = "#E05A4E" if abnormal else "#475569"
             weight = "700" if abnormal else "500"
             vitals_html += (
                 f'<span style="margin-right:16px;font-size:12px;color:{color};font-weight:{weight};">'
@@ -1357,9 +1372,9 @@ def render_results_page():
         for f in top_features:
             name = FEATURE_DISPLAY_NAMES.get(f.get("feature", ""), f.get("feature", "").replace("_", " ").title())
             is_against = "away" in f.get("direction", "")
-            chip_bg     = "#fee2e2" if is_against else "#dcfce7"
-            chip_color  = "#b91c1c" if is_against else "#15803d"
-            chip_border = "#fca5a5" if is_against else "#86efac"
+            chip_bg     = "#fee2e2" if is_against else "#EBF4F4"
+            chip_color  = "#E05A4E" if is_against else "#1A7A7A"
+            chip_border = "#fca5a5" if is_against else "#A8D8D8"
             arrow       = "↑" if is_against else "↓"
             chips_html += f"""<span style="display:inline-flex;align-items:center;gap:4px;
                 background:{chip_bg};color:{chip_color};border:1px solid {chip_border};
@@ -1412,7 +1427,7 @@ def render_results_page():
             st.caption("No similar cases retrieved.")
         else:
             URGENCY_LABEL = {1: "Critical", 2: "Emergent", 3: "Urgent"}
-            URGENCY_COLOR = {1: "#b91c1c", 2: "#c2410c", 3: "#a16207"}
+            URGENCY_COLOR = {1: "#E05A4E", 2: "#c2410c", 3: "#a16207"}
             URGENCY_BG    = {1: "#fee2e2", 2: "#ffedd5", 3: "#fef9c3"}
             rows = ""
             for c in similar_cases:
@@ -1433,7 +1448,7 @@ def render_results_page():
                 patient_info = (c.get("patient_info") or "").replace("Gender: ", "").replace("Race: ", "").replace("Age: ", "")
                 rows += f"""<tr style="border-bottom:1px solid #f1f5f9;">
                     <td style="padding:8px 4px;">
-                        <div style="font-weight:600;font-size:13px;color:#0f172a;">{complaint}</div>
+                        <div style="font-weight:600;font-size:13px;color:#2D3748;">{complaint}</div>
                         <div style="font-size:11px;color:#475569;margin-top:2px;">{patient_info}</div>
                         <div style="font-size:11px;color:#64748b;margin-top:2px;">{diagnosis}{sim_str}</div>
                         <div style="font-size:11px;color:#94a3b8;margin-top:2px;">{vitals_str}</div>
