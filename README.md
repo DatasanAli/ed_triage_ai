@@ -19,7 +19,7 @@ The downstream effects are real:
 - Nursing overload from incorrectly prioritized cases
 - Billions of dollars in misallocated care costs annually
 
-Existing ML approaches achieve 65–75% accuracy on triage prediction, but they function as black boxes — providing a prediction without any explanation. Clinicians cannot act on a prediction they cannot understand or verify.
+Recent machine learning approaches have demonstrated strong performance on ED triage-related prediction tasks, achieving AUC values of 0.73 to 0.92 for critical care and hospitalization outcomes using vital signs and clinical notes (Levin et al., 2018; Raita et al., 2019). However, these models typically function as black boxes, providing predictions without clinical reasoning or evidence to support their classifications.
 
 ---
 
@@ -116,11 +116,11 @@ The model missed 54% of critical patients in standalone mode — directly motiva
 
 | Metric | Standalone | Reconciled | Change |
 |--------|-----------|------------|--------|
-| Macro-F1 | 0.666 | 0.679 | +0.013 |
-| **Critical Recall** | **0.46** | **0.71** | **+0.248 ▲** |
-| Critical F1 | 0.575 | 0.680 | +0.105 |
+| Macro-F1 | 0.66 | 0.65 | -0.016 |
+| **Critical Recall** | **0.46** | **0.60** | **+0.14 ▲** |
+| Critical F1 | 0.58 | 0.60 | +0.025 |
 
-**Critical recall improved from 46% → 71%.** The system now correctly identifies roughly 7 in 10 of the most severe presentations, compared to fewer than 5 in 10 with the model alone.
+**Critical recall improved from 46% → 60%.** The system now correctly identifies roughly 6 in 10 of the most severe presentations, compared to fewer than 5 in 10 with the model alone.
 
 ---
 
@@ -129,7 +129,7 @@ The model missed 54% of critical patients in standalone mode — directly motiva
 Four architecture families were explored before arriving at BERTGBMFusion. The goal throughout was maximizing critical patient recall without sacrificing macro-F1.
 
 ### Arch 1 (Baseline Fusion)
-BioClinicalBERT + XGBoost (5-fold OOF, 27 features, CC + HPI + PMH text format). Established the dual-branch fusion pattern and explored class weighting. Hard inverse-frequency weights caused training instability; switching to sqrt-dampened weights improved macro-F1 by +2.2 pp.
+BioClinicalBERT + XGBoost (5-fold OOF, 27 features, CC + HPI + PMH text format). Established the dual-branch fusion pattern and explored class weighting. Hard inverse-frequency weights caused training instability; switching to sqrt-dampened weights improved macro-F1 by +0.6 pp.
 
 | Variant | Macro-F1 | Critical F1 |
 |---------|----------|-------------|
@@ -210,7 +210,7 @@ ed_triage_ai/
 │   └── models/arch4/              # BERTGBMFusion implementation
 │
 ├── notebooks/                     # Training (arch4), EDA, data cleaning,
-│                                  # feature engineering, comprehensive pipeline tests
+│                                  # feature engineering
 ├── scripts/                       # run_triage.py (CLI runner), eval_e2e_pipeline.py
 ├── experimental/                  # Archived explorations (arch1/2/3, GatorTron, Llama)
 └── docs/                          # Orchestration design, arch4 walkthrough, RAG design
@@ -232,7 +232,7 @@ ed_triage_ai/
 # Clone and install
 git clone <repo>
 cd ed_triage_ai
-pip install -r src/backend/requirements.txt   # lightweight install for UI/API only
+pip install -r requirements.txt
 
 # Set AWS profile (local only — SageMaker uses instance role)
 export AWS_PROFILE=ed-triage
@@ -255,9 +255,9 @@ python scripts/run_triage.py
 
 ### Full Pipeline Evaluation
 
-Open `notebooks/comprehensive_test.ipynb` for an end-to-end evaluation across 10 clinical scenarios covering ESI 1–3, edge cases, SHAP contradictions, and RAG majority disagreement.
+Open `notebooks/arch4_training_v1.ipynb` for the end-to-end model training and evaluation notebook covering preprocessing, fusion model training, SHAP analysis, and test set results.
 
-> **Note**: The root `requirements.txt` includes heavy SageMaker/ML packages for training. Use `src/backend/requirements.txt` for running just the backend and UI locally.
+> **Note**: The root `requirements.txt` includes all project dependencies, including heavy SageMaker/ML packages for training.
 
 ---
 
@@ -283,7 +283,7 @@ The ML model is trained and deployed via an automated SageMaker Pipeline followi
 
 **Pipeline steps**: `Preprocess → Train → Evaluate → CheckChampion → Register → Deploy`
 
-See [sagemaker/README.md](sagemaker/README.md) for full pipeline documentation and deployment instructions.
+See [sagemaker/](sagemaker/) for pipeline DAG, step implementations, and deployment configuration.
 
 ---
 
@@ -303,6 +303,7 @@ See [sagemaker/README.md](sagemaker/README.md) for full pipeline documentation a
 - Gilboy N, et al. (2011). Emergency Severity Index (ESI): A Triage Tool for Emergency Department Care, Version 4.
 - Alsentzer E, et al. (2019). Publicly available clinical BERT embeddings. *ACL Clinical NLP Workshop*.
 - Levin S, et al. (2018). Machine-learning-based electronic triage more accurately differentiates patients with respect to clinical outcomes. *Annals of Emergency Medicine*.
+- Raita Y, et al. (2019). Emergency department triage prediction of clinical outcomes using machine learning models. *Critical Care*.
 - Gaber F & Akalin A. (2025). Evaluating LLM workflows in clinical decision support for triage, referral, and diagnosis. *npj Digital Medicine*.
 - Cutillo CM, et al. (2024). Machine intelligence in healthcare: perspectives on trustworthiness, explainability, usability, and transparency. *NPJ Digital Medicine*.
 
