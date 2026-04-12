@@ -2,6 +2,14 @@
 
 # TriagePulse — AI-Powered Decision Support for Emergency Department Triage
 
+![Python](https://img.shields.io/badge/Python-3.9%2B-blue?logo=python&logoColor=white)
+![AWS](https://img.shields.io/badge/AWS-SageMaker%20%7C%20Bedrock%20%7C%20Secrets%20Manager-orange?logo=amazonaws&logoColor=white)
+![LangGraph](https://img.shields.io/badge/LangGraph-Agent%20Orchestration-blueviolet)
+![Pinecone](https://img.shields.io/badge/Pinecone-Vector%20Store-brightgreen)
+![FastAPI](https://img.shields.io/badge/FastAPI-Backend-009688?logo=fastapi&logoColor=white)
+![Streamlit](https://img.shields.io/badge/Streamlit-UI-FF4B4B?logo=streamlit&logoColor=white)
+![Research](https://img.shields.io/badge/USD-AAI--590%20Capstone-blue)
+
 **Predict · Retrieve · Reason**
 
 TriagePulse is a clinical decision support system that helps ED triage nurses assess patient acuity using a combination of machine learning, retrieval of similar historical cases, and independent LLM clinical reasoning. It was developed as a capstone research project for the AAI-590 program at the University of San Diego.
@@ -35,11 +43,13 @@ TriagePulse gives a triage nurse three things from a single patient input:
 
 The nurse enters a chief complaint and vitals. The system returns a recommendation, the evidence behind it, and a plain-language clinical rationale — in roughly 14 seconds.
 
-[image here: screenshot of the TriagePulse Streamlit UI showing triage output for a sample case]
+![TriagePulse Streamlit UI](results/UIScreenshot.png)
 
 ---
 
 ## How It Works
+
+![End-to-End Architecture](results/E2Earchiecture.png)
 
 The system is a four-stage pipeline:
 
@@ -77,8 +87,6 @@ Patient Input (Chief Complaint + Vitals + HPI)
      Final Report → Streamlit UI
 ```
 
-[image here: system architecture diagram showing Streamlit → FastAPI → SageMaker + LangGraph pipeline]
-
 ### Confidence-Gated Reconciliation
 
 The two signals — ML model and LLM — are reconciled with a safety-first rule:
@@ -88,8 +96,6 @@ The two signals — ML model and LLM — are reconciled with a safety-first rule
 - **All other cases** → keep the model prediction
 
 The LLM can only escalate acuity, never reduce it. When in doubt, the system errs toward caution.
-
-[image here: confidence-gated reconciliation flowchart]
 
 ---
 
@@ -111,6 +117,11 @@ The LLM can only escalate acuity, never reduce it. When in doubt, the system err
 | L3 Urgent | 0.78 | 0.82 | 0.800 |
 
 The model missed 54% of critical patients in standalone mode — directly motivating the agentic reconciliation layer.
+
+### Training Curves
+
+![Loss and F1 training curves](results/figure1_loss_curve.png)
+![F1 per-class training curve](results/figure2_f1_curve.png)
 
 ### Confidence-Gated Pipeline — End-to-End
 
@@ -182,6 +193,7 @@ At just 6% of records, critical patients are the hardest class to learn and the 
 
 ```
 ed_triage_ai/
+├── .env.example                   # Environment variable template — copy to .env
 ├── requirements.txt               # Project dependencies
 │
 ├── src/
@@ -194,15 +206,18 @@ ed_triage_ai/
 │   ├── backend/                   # FastAPI service
 │   │   ├── main.py                # /health and /predict routes
 │   │   ├── schemas.py             # TriageRequest + TriageResponse
-│   │   ├── config.py              # Environment variable config
+│   │   ├── config.py              # Environment variable config (pydantic-settings)
 │   │   └── sagemaker_service.py   # run_triage_inference — pipeline entry point
 │   ├── frontend/                  # Streamlit UI
 │   │   └── app.py                 # Intake form + results page
-│   ├── retreival/
+│   ├── retrieval/
 │   │   └── retrieval.py           # EDTriageRAG — Pinecone retrieval via Titan embeddings
 │   ├── reasoning/
 │   │   └── clinical_reasoning.py  # Standalone ClinicalReasoner
 │   └── embeddings/                # Pinecone index build tools
+│       ├── data_prep.py           # Prepare MIMIC cases for embedding
+│       ├── generate_embeddings.py # Embed cases via Bedrock Titan
+│       └── upload_to_pinecone.py  # Upsert vectors into Pinecone
 │
 ├── sagemaker/
 │   ├── pipeline/                  # Pipeline DAG and runner
@@ -212,6 +227,7 @@ ed_triage_ai/
 ├── notebooks/                     # Training (arch4), EDA, data cleaning,
 │                                  # feature engineering
 ├── scripts/                       # run_triage.py (CLI runner), eval_e2e_pipeline.py
+├── results/                       # Evaluation outputs and training curve plots
 ├── experimental/                  # Archived explorations (arch1/2/3, GatorTron, Llama)
 └── docs/                          # Orchestration design, arch4 walkthrough, RAG design
 ```
@@ -222,19 +238,70 @@ ed_triage_ai/
 
 ### Prerequisites
 
-- AWS credentials with access to Bedrock, SageMaker, and Secrets Manager
-- Pinecone API key stored in AWS Secrets Manager (`prod/pinecone/api_key`)
 - Python 3.9+
+- AWS account with access to:
+  - **Bedrock** — Claude Sonnet (`us.anthropic.claude-sonnet-4-5`) and Titan Embeddings v2 (`amazon.titan-embed-text-v2:0`) enabled in your region
+  - **SageMaker** — a deployed BERTGBMFusion real-time endpoint (see [SageMaker Pipeline](#sagemaker-pipeline))
+  - **Secrets Manager** — Pinecone API key stored at secret name `prod/pinecone/api_key` with key `PINECONE_API_KEY`
+- Pinecone account with the `ed-triage-cases` index populated (see [Building the Vector Index](#building-the-vector-index))
 
-### Quick Start — Backend + Frontend
+### 1. Clone and Install
 
 ```bash
-# Clone and install
-git clone <repo>
+git clone https://github.com/DatasanAli/ed_triage_ai.git
 cd ed_triage_ai
 pip install -r requirements.txt
+```
 
-# Set AWS profile (local only — SageMaker uses instance role)
+### 2. Configure Environment
+
+Copy the template and fill in your values:
+
+```bash
+cp .env.example .env
+```
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `AWS_PROFILE` | `ed-triage` | Named AWS profile (`aws configure --profile ed-triage`) |
+| `AWS_REGION` | `us-east-1` | AWS region for all services |
+| `PINECONE_INDEX_NAME` | `ed-triage-cases` | Pinecone index name |
+| `S3_BUCKET` | `ed-triage-capstone-group7` | S3 bucket for embedding backups |
+
+The backend also reads these variables (prefixed with `TRIAGE_` when set as env vars, or unprefixed in `.env`):
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `TRIAGE_SAGEMAKER_ENDPOINT_NAME` | `edtriage-live` | SageMaker real-time endpoint name |
+| `TRIAGE_AWS_REGION` | `us-east-1` | AWS region |
+| `TRIAGE_AWS_PROFILE` | `ed-triage` | AWS profile |
+| `TRIAGE_USE_MOCK` | `false` | Set to `true` to run without AWS (returns dummy predictions) |
+
+> **Note**: The Pinecone API key is **not** stored in `.env`. It is fetched at runtime from AWS Secrets Manager under the secret name `prod/pinecone/api_key`. Store your key there with the field name `PINECONE_API_KEY`.
+
+### 3. Building the Vector Index
+
+If this is a fresh deployment or the Pinecone index doesn't exist yet, build it from the MIMIC data:
+
+```bash
+export AWS_PROFILE=ed-triage
+export PYTHONPATH=src
+
+# Step 1 — Prepare cases from MIMIC-IV (requires MIMIC data access)
+python src/embeddings/data_prep.py
+
+# Step 2 — Embed each case via Amazon Bedrock Titan (~$0.04 for 9k cases, ~30 min)
+python src/embeddings/generate_embeddings.py
+
+# Step 3 — Upload vectors to Pinecone and back up to S3
+python src/embeddings/upload_to_pinecone.py
+```
+
+If the S3 backup already exists from a previous run, you can skip steps 1–2 and download `embeddings_output.jsonl` from `s3://ed-triage-capstone-group7/embeddings/embeddings_output.jsonl`, then run only step 3.
+
+### 4. Start the Backend + Frontend
+
+```bash
 export AWS_PROFILE=ed-triage
 export PYTHONPATH=src
 
@@ -257,7 +324,13 @@ python scripts/run_triage.py
 
 Open `notebooks/arch4_training_v1.ipynb` for the end-to-end model training and evaluation notebook covering preprocessing, fusion model training, SHAP analysis, and test set results.
 
-> **Note**: The root `requirements.txt` includes all project dependencies, including heavy SageMaker/ML packages for training.
+### Mock Mode (no AWS required)
+
+To run the UI locally without AWS credentials:
+
+```bash
+TRIAGE_USE_MOCK=true uvicorn src.backend.main:app --reload --port 8000
+```
 
 ---
 
@@ -265,15 +338,21 @@ Open `notebooks/arch4_training_v1.ipynb` for the end-to-end model training and e
 
 | Component | Technology |
 |-----------|-----------|
-| ML model | BioClinicalBERT + LightGBM (BERTGBMFusion) |
-| Model serving | AWS SageMaker real-time endpoint |
+| ML model | BioClinicalBERT (`emilyalsentzer/Bio_ClinicalBERT`) + LightGBM (BERTGBMFusion) |
+| Deep learning framework | PyTorch + HuggingFace Transformers |
+| Model training | 5-fold stratified cross-validation, AdamW optimizer |
+| Model serving | AWS SageMaker real-time endpoint (`edtriage-live`) |
+| ML pipeline | AWS SageMaker Pipelines (champion/challenger pattern) |
 | LLM reasoning | Claude Sonnet via AWS Bedrock |
-| RAG embeddings | Amazon Titan Embed v2 |
-| Vector store | Pinecone (`ed-triage-cases` index, ~8K encounters) |
-| Agent orchestration | LangGraph |
-| API | FastAPI |
+| RAG embeddings | Amazon Titan Embed v2 (`amazon.titan-embed-text-v2:0`, 1024-dim) |
+| Vector store | Pinecone serverless (`ed-triage-cases` index, ~8K encounters, cosine similarity) |
+| Agent orchestration | LangGraph (parallel fan-out/fan-in graph) |
+| LLM SDK | LangChain + `langchain-anthropic` |
+| API | FastAPI + pydantic-settings |
 | UI | Streamlit |
 | Feature attribution | SHAP TreeExplainer |
+| Secrets management | AWS Secrets Manager |
+| Data processing | pandas, scikit-learn |
 
 ---
 
