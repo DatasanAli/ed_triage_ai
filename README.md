@@ -43,13 +43,13 @@ TriagePulse gives a triage nurse three things from a single patient input:
 
 The nurse enters a chief complaint and vitals. The system returns a recommendation, the evidence behind it, and a plain-language clinical rationale — in roughly 14 seconds.
 
-![TriagePulse Streamlit UI](results/UIScreenshot.png)
+![TriagePulse Streamlit UI](assets/UIScreenshot.png)
 
 ---
 
 ## How It Works
 
-![End-to-End Architecture](results/E2Earchiecture.png)
+![End-to-End Architecture](assets/E2Earchiecture.png)
 
 The system is a four-stage pipeline:
 
@@ -120,8 +120,8 @@ The model missed 54% of critical patients in standalone mode — directly motiva
 
 ### Training Curves
 
-![Loss and F1 training curves](results/figure1_loss_curve.png)
-![F1 per-class training curve](results/figure2_f1_curve.png)
+![Loss and F1 training curves](assets/figure1_loss_curve.png)
+![F1 per-class training curve](assets/figure2_f1_curve.png)
 
 ### Confidence-Gated Pipeline — End-to-End
 
