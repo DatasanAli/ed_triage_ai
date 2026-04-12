@@ -118,11 +118,6 @@ The LLM can only escalate acuity, never reduce it. When in doubt, the system err
 
 The model missed 54% of critical patients in standalone mode — directly motivating the agentic reconciliation layer.
 
-### Training Curves
-
-![Loss and F1 training curves](assets/figure1_loss_curve.png)
-![F1 per-class training curve](assets/figure2_f1_curve.png)
-
 ### Confidence-Gated Pipeline — End-to-End
 
 | Metric | Standalone | Reconciled | Change |
