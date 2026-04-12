@@ -226,7 +226,7 @@ ed_triage_ai/
 │                                  # feature engineering
 ├── scripts/                       # run_triage.py (CLI runner), eval_e2e_pipeline.py
 ├── results/                       # Evaluation outputs and training curve plots
-├── experimental/                  # Archived explorations (arch1/2/3, GatorTron, Llama)
+├── experimental/                  # Archived explorations (arch1/2/3, GatorTron, Llama, arch4_v2)
 └── docs/                          # Orchestration design, arch4 walkthrough, RAG design
 ```
 
