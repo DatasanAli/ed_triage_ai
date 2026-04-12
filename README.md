@@ -12,6 +12,9 @@
 
 **Predict · Retrieve · Reason**
 
+**Team**: Hassan Ali · Bosky Atlani · Antonio Recalde
+**Program**: AAI-590 Capstone · University of San Diego, Shiley Marcos School of Engineering
+
 TriagePulse is a clinical decision support system that helps ED triage nurses assess patient acuity using a combination of machine learning, retrieval of similar historical cases, and independent LLM clinical reasoning. It was developed as a capstone research project for the AAI-590 program at the University of San Diego.
 
 > **Designed to augment — not replace — clinical judgment.**
@@ -382,8 +385,5 @@ See [sagemaker/](sagemaker/) for pipeline DAG, step implementations, and deploym
 - Cutillo CM, et al. (2024). Machine intelligence in healthcare: perspectives on trustworthiness, explainability, usability, and transparency. *NPJ Digital Medicine*.
 
 ---
-
-**Team**: Hassan Ali · Bosky Atlani · Antonio Recalde
-**Program**: AAI-590 Capstone · University of San Diego, Shiley Marcos School of Engineering
 
 > **Disclaimer**: TriagePulse is a capstone research project. Clinical deployment requires prospective validation, regulatory approval, and integration with hospital EHR workflows.
