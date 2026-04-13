@@ -13,7 +13,7 @@ class Settings(BaseSettings):
 
     sagemaker_endpoint_name: str = "edtriage-live"
     aws_region: str = "us-east-1"
-    aws_profile: str = "ed-triage"
+    aws_profile: str = ""
     use_mock: bool = False
     default_model: str = "arch4"
 
